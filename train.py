@@ -10,30 +10,30 @@ from torch.utils.data import Subset, DataLoader
 from statistics import mean
 from src.models.pinn import PINN
 from src.losses.pinn_loss import PINN_Loss
-from src.utils.preprocess import ParaLoader
+from src.utils.paraloader import Paraloader
 
 with open("config.yaml", "r") as file:
     config = yaml.safe_load(file)
     
-BATCH_SIZE = config["settings"]["batch_size"]
-NUM_WORKERS = config["settings"]["num_workers"]
-NUM_EPOCHS = config["settings"]["num_epochs"]
-LR_RATE = config["settings"]["lr_rate"]
-HIDDEN_DIM = config["settings"]["hidden_dim"]
-NUM_LAYERS = config["settings"]["num_layers"]
-ALPHA = config["settings"]["alpha"]
-SEQ_LEN = config["settings"]["sequence_length"]
+BATCH_SIZE = int(config["settings"]["batch_size"])
+NUM_WORKERS = int(config["settings"]["num_workers"])
+NUM_EPOCHS = int(config["settings"]["num_epochs"])
+LR_RATE = float(config["settings"]["lr_rate"])
+HIDDEN_DIM = int(config["settings"]["hidden_dim"])
+NUM_LAYERS = int(config["settings"]["num_layers"])
+ALPHA = float(config["settings"]["alpha"])
+SEQ_LEN = int(config["settings"]["sequence_length"])
 
-PARA_DIR = config["directories"]["parameter"]
+PARA_DIR = config["directories"]["para_dir"]
 CHECKPOINT = config["directories"]["checkpoint"]
-REF = config["constants"]["ref"]
-COOL = config["constants"]["cool"]
+REF = config["directories"]["ref"]
+COOL = config["directories"]["cool"]
 
-wandb.init(project='PINN heat exchanger modeling', reinit=True, resume="never", config=config)
+# wandb.init(project='Heat exchanger', reinit=True, resume="never", config=config)
 
 # load and split dataset
-train_ds = ParaLoader(dir = PARA_DIR, sequence_length = SEQ_LEN)
-val_ds = ParaLoader(dir = PARA_DIR, sequence_length = SEQ_LEN)
+train_ds = Paraloader(dir = PARA_DIR, sequence_length = SEQ_LEN)
+val_ds = Paraloader(dir = PARA_DIR, sequence_length = SEQ_LEN)
 
 indices = np.arange(len(train_ds))
 train_idx, val_idx = train_test_split(indices, test_size=0.2, shuffle=False, random_state=37)
@@ -45,8 +45,8 @@ train_dl = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=False, num_worker
 val_dl = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
 
 # Initialize model, loss, scheduler, and optimizer
-model = PINN(hidden_dim=HIDDEN_DIM, num_layers=NUM_LAYERS)
-loss = PINN_Loss(REF, COOL, alpha = ALPHA)
+model = PINN(input_size=7, hidden_dim=HIDDEN_DIM, num_layers=NUM_LAYERS, output_size=6)
+criterion = PINN_Loss(alpha = ALPHA)
 
 optimizer = optim.Adam(model.parameters(), lr=LR_RATE)
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=NUM_EPOCHS, eta_min=1e-7)
@@ -61,9 +61,10 @@ for epoch in range(num_epochs):
     print(f"Epoch {epoch+1}/{num_epochs} - Training ")
     for batch in train_dl: 
         model_input, ground_truth = batch
-        outputs = model(model_input, ground_truth)
-        dx_dt = torch.autograd.grad(outputs=outputs[0], outputs[1], inputs=x, grad_outputs=torch.ones_like(outputs), create_graph=True, retain_graph=True)[0]
-        train_loss = loss(model_input, outputs, ground_truth)
+        outputs = model(model_input)
+        xdot_model = 1
+        # xdot_model = torch.autograd.grad(outputs=outputs[0], outputs[1], inputs=x, grad_outputs=torch.ones_like(outputs), create_graph=True, retain_graph=True)[0]
+        train_loss = criterion(xdot_model, outputs, ground_truth)
 
         train_losses.append(train_loss.item())
         optimizer.zero_grad()
@@ -83,7 +84,7 @@ for epoch in range(num_epochs):
     for batch in val_dl:
         model_input, ground_truth = batch
         outputs = model(model_input, ground_truth)
-        train_loss = loss(model_input, outputs, ground_truth)
+        train_loss = criterion(model_input, outputs, ground_truth)
     mean_val_loss = mean(val_losses)
     wandb.log({"val_loss": mean_val_loss})
 

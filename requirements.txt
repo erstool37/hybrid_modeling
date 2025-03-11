@@ -38,5 +38,6 @@ tzdata==2025.1
 urllib3==2.3.0
 utility==1.0
 wandb==0.19.8
+casadi
 
 # vessl storage copy-file optimized volume://vessl-storage/hybrid-modeling 

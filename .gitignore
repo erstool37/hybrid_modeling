@@ -1,2 +1,4 @@
 dataset_gen/
 dataset/
+wandb/
+**/__pycache__/

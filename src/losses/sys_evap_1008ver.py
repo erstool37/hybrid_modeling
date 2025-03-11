@@ -4,10 +4,9 @@ Created on Fri Aug 30 18:51:43 2024
 @author: jisung
 """
 
-
 import numpy as np
 import casadi as ca
-import utility as ut
+from .utility import zero_one_scale, zero_one_descale
 
 class Evaporator(object):
     
@@ -95,15 +94,15 @@ class Evaporator(object):
         
         
     def go_step(self, x, u, p):
-        scaled_x = ut.zero_one_scale(x, self.x_min, self.x_max)
-        scaled_u = ut.zero_one_scale(u, self.u_min, self.u_max)
-        scaled_p = ut.zero_one_scale(p, self.p_min, self.p_max)
+        scaled_x = zero_one_scale(x, self.x_min, self.x_max)
+        scaled_u = zero_one_scale(u, self.u_min, self.u_max)
+        scaled_p = zero_one_scale(p, self.p_min, self.p_max)
         scaled_up = np.hstack((scaled_u, scaled_p))
         
         result = self.step_fcn(x0=scaled_x, p=scaled_up)       
             
         scaled_next_x = np.squeeze(np.array(result['xf']))
-        next_x = ut.zero_one_descale(scaled_next_x, self.x_min, self.x_max)
+        next_x = zero_one_descale(scaled_next_x, self.x_min, self.x_max)
         return next_x
     
     

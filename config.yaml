@@ -9,7 +9,7 @@ settings:
   sequence_length : 10
 
 directories:
-  para_dir : 'dataset/optimized'
+  para_dir : 'dataset/dataset.csv'
   checkpoint : "src/models/PINN0310_01.pth" # freshly trained model name
   ref : 'dataset/reference'
   cool : 'dataset/cooling'
