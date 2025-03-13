@@ -1,5 +1,256 @@
-import casadi as ca
+import torch
+import torch.nn as nn
 
+class Refrigerant(nn.Module):
+    def __init__(self, coefficients):
+        super(Refrigerant, self).__init__()
+
+        # coefficients
+        self.coeff_Tsat = torch.tensor(coefficients["Tsat"]).reshape(-1).float()
+
+        self.coeff_vap_hsat = torch.tensor(coefficients["vap_hsat"]).float()
+        self.coeff_vap_Dsat = torch.tensor(coefficients["vap_Dsat"]).float()
+        self.coeff_vap_musat = torch.tensor(coefficients["vap_musat"]).float()
+        self.coeff_vap_ksat = torch.tensor(coefficients["vap_ksat"]).float()
+        self.coeff_vap_Cpsat = torch.tensor(coefficients["vap_Cpsat"]).float()
+        self.coeff_vap_Prsat = torch.tensor(coefficients["vap_Prsat"]).float()
+        self.coeff_vap_dhsatdp = torch.tensor(coefficients["vap_dhsatdp"]).float()
+        self.coeff_vap_dDsatdp = torch.tensor(coefficients["vap_dDsatdp"]).float()
+
+        self.coeff_liq_hsat = torch.tensor(coefficients["liq_hsat"]).float()
+        self.coeff_liq_Dsat = torch.tensor(coefficients["liq_Dsat"]).float()
+        self.coeff_liq_musat = torch.tensor(coefficients["liq_musat"]).float()
+        self.coeff_liq_ksat = torch.tensor(coefficients["liq_ksat"]).float()
+        self.coeff_liq_Cpsat = torch.tensor(coefficients["liq_Cpsat"]).float()
+        self.coeff_liq_Prsat = torch.tensor(coefficients["liq_Prsat"]).float()
+        self.coeff_liq_dhsatdp = torch.tensor(coefficients["liq_dhsatdp"]).float()
+        self.coeff_liq_dDsatdp = torch.tensor(coefficients["liq_dDsatdp"]).float()
+
+        self.coeff_vap_sph = torch.tensor(coefficients["vap_sph"]).float()
+        self.coeff_vap_hps = torch.tensor(coefficients["vap_hps"]).float()
+        self.coeff_vap_Dph = torch.tensor(coefficients["vap_Dph"]).float()
+        self.coeff_vap_muph = torch.tensor(coefficients["vap_muph"]).float()
+        self.coeff_vap_kph = torch.tensor(coefficients["vap_kph"]).float()
+        self.coeff_vap_Cph = torch.tensor(coefficients["vap_Cph"]).float()
+        self.coeff_vap_Tph = torch.tensor(coefficients["vap_Tph"]).float()
+        self.coeff_vap_CpT = torch.tensor(coefficients["vap_CpT"]).float()
+        self.coeff_vap_Prph = torch.tensor(coefficients["vap_Prph"]).float()
+        self.coeff_vap_dsdp = torch.tensor(coefficients["vap_dsdp"]).float()
+        self.coeff_vap_dsdh = torch.tensor(coefficients["vap_dsdh"]).float()
+        self.coeff_vap_dhdp = torch.tensor(coefficients["vap_dhdp"]).float()
+        self.coeff_vap_dhds = torch.tensor(coefficients["vap_dhds"]).float()
+        self.coeff_vap_dDdp = torch.tensor(coefficients["vap_dDdp"]).float()
+        self.coeff_vap_dDdh = torch.tensor(coefficients["vap_dDdh"]).float()
+
+        self.coeff_liq_Dph = torch.tensor(coefficients["liq_Dph"]).float()
+        self.coeff_liq_muph = torch.tensor(coefficients["liq_muph"]).float()
+        self.coeff_liq_kph = torch.tensor(coefficients["liq_kph"]).float()
+        self.coeff_liq_Cph = torch.tensor(coefficients["liq_Cph"]).float()
+        self.coeff_liq_Tph = torch.tensor(coefficients["liq_Tph"]).float()
+        self.coeff_liq_CpT = torch.tensor(coefficients["liq_CpT"]).float()
+        self.coeff_liq_Prph = torch.tensor(coefficients["liq_Prph"]).float()
+        self.coeff_liq_dDdp = torch.tensor(coefficients["liq_dDdp"]).float()
+        self.coeff_liq_dDdh = torch.tensor(coefficients["liq_dDdh"]).float()
+
+    # Normalization functions
+    def norm_psat(self, x):
+        return (x - 1670.0) / 955.3279
+
+    def norm_Tsat(self, x):
+        return (x - 52.5643) / 33.3173
+
+    def norm_vap_p(self, x): return (x - 1300.9) / 939.1761
+    def norm_vap_h(self, x): return (x - 432.5771) / 32.0814
+    def norm_vap_T(self, x): return (x - 83.8534) / 34.6682
+    def norm_vap_s(self, x): return (x - 1.7544) / 0.1025
+    def norm_liq_p(self, x): return (x - 1984.0) / 880.9612
+    def norm_liq_h(self, x): return (x - 212.5470) / 49.7295
+    def norm_liq_T(self, x): return (x - 7.2744) / 36.7646
+
+    def poly7(self, x): return torch.cat([x**i for i in range(7, -1, -1)], dim=-1)
+    def poly8(self, x): return torch.cat([x**i for i in range(8, -1, -1)], dim=-1)
+    def poly9(self, x): return torch.cat([x**i for i in range(9, -1, -1)], dim=-1)
+    def poly14(self, x, y): return torch.cat([torch.tensor([1.0], device=x.device), x, y, x*y, y**2, x*(y**2), y**3, x*(y**3), y**4], dim=-1)
+    def poly15(self, x, y): return torch.cat([torch.tensor([1.0], device=x.device), x, y, x*y, y**2, x*(y**2), y**3, x*(y**3), y**4, x*(y**4), y**5], dim=-1)
+    def poly23(self, x, y): return torch.cat([torch.tensor([1.0], device=x.device), x, y, x**2, x*y, y**2, x**2*y, x*y**2, y**3], dim=-1)
+    def poly24(self, x, y): return torch.cat([torch.tensor([1.0], device=x.device), x, y, x**2, x*y, y**2, x**2*y, x*y**2, y**3, x**2*y**2, x*y**3, y**4], dim=-1)
+    def poly25(self, x, y): return torch.cat([torch.tensor([1.0], device=x.device), x, y, x**2, x*y, y**2, x**2*y, x*y**2, y**3, x**2*y**2, x*y**3, y**4, x**2*y**3, x*y**4, y**5], dim=-1)
+    def poly45(self, x, y): return torch.cat([torch.tensor([1.0], device=x.device), x, y, x**2, x*y, y**2, x**3, x**2*y, x*y**2, y**3, x**4, x**3*y, x**2*y**2, x*y**3, y**4, x**4*y, x**3*y**2, x**2*y**3, x*y**4, y**5], dim=-1)
+    def poly52(self, x, y): return torch.cat([torch.tensor([1.0], device=x.device), x, y, x**2, x*y, y**2, x**3, x**2*y, x*y**2, x**4, x**3*y, x**2*y**2, x**5, x**4*y, x**3*y**2], dim=-1)
+    def poly54(self, x, y): return torch.cat([torch.tensor([1.0], device=x.device), x, y, x**2, x*y, y**2, x**3, x**2*y, x*y**2, y**3, x**4, x**3*y, x**2*y**2, x*y**3, y**4, x**5, x**4*y, x**3*y**2, x**2*y**3, x*y**4], dim=-1)
+    def poly55(self, x, y): return torch.cat([torch.tensor([1.0], device=x.device), x, y, x**2, x*y, y**2, x**3, x**2*y, x*y**2, y**3, x**4, x**3*y, x**2*y**2, x*y**3, y**4, x**5, x**4*y, x**3*y**2, x**2*y**3, x*y**4, y**5], dim=-1)
+    
+
+    # Saturation properties
+    def Tsat(self, p):
+        a, b, c = self.coeff_Tsat
+        Tsat = b / (a - torch.log10(p)) - c
+        return Tsat
+
+    def vap_hsat(self, p):
+        vap_hsat = torch.matmul(self.coeff_vap_hsat, self.poly8(self.norm_psat(p)).T)
+        return vap_hsat
+
+    def vap_Dsat(self, p):
+        vap_Dsat = torch.matmul(self.coeff_vap_Dsat, self.poly9(self.norm_psat(p)).T)
+        return vap_Dsat
+
+    def vap_musat(self, p):
+        vap_musat = torch.matmul(self.coeff_vap_musat, self.poly9(self.norm_psat(p)).T)
+        return vap_musat
+
+    def vap_ksat(self, p):
+        vap_ksat = torch.matmul(self.coeff_vap_ksat, self.poly9(self.norm_psat(p)).T)
+        return vap_ksat
+
+    def vap_Cpsat(self, p):
+        vap_Cpsat = torch.matmul(self.coeff_vap_Cpsat, self.poly9(self.norm_psat(p)).T)
+        return vap_Cpsat
+
+    def vap_Prsat(self, p):
+        vap_Prsat = torch.matmul(self.coeff_vap_Prsat, self.poly9(self.norm_psat(p)).T)
+        return vap_Prsat
+
+    def vap_dhsatdp(self, p):
+        vap_dhsatdp = torch.matmul(self.coeff_vap_dhsatdp, self.poly7(self.norm_psat(p)).T)
+        return vap_dhsatdp
+
+    def vap_dDsatdp(self, p):
+        vap_dDsatdp = torch.matmul(self.coeff_vap_dDsatdp, self.poly8(self.norm_psat(p)).T)
+        return vap_dDsatdp
+
+    def liq_hsat(self, p):
+        liq_hsat = torch.matmul(self.coeff_liq_hsat, self.poly9(self.norm_psat(p)).T)
+        return liq_hsat
+
+    def liq_Dsat(self, p):
+        liq_Dsat = torch.matmul(self.coeff_liq_Dsat, self.poly9(self.norm_psat(p)).T)
+        return liq_Dsat
+
+    def liq_musat(self, p):
+        liq_musat = torch.matmul(self.coeff_liq_musat, self.poly9(self.norm_psat(p)).T)
+        return liq_musat
+
+    def liq_ksat(self, p):
+        liq_ksat = torch.matmul(self.coeff_liq_ksat, self.poly8(self.norm_psat(p)).T)
+        return liq_ksat
+
+    def liq_Cpsat(self, p):
+        liq_Cpsat = torch.matmul(self.coeff_liq_Cpsat, self.poly9(self.norm_psat(p)).T)
+        return liq_Cpsat
+
+    def liq_Prsat(self, p):
+        liq_Prsat = torch.matmul(self.coeff_liq_Prsat, self.poly8(self.norm_psat(p)).T)
+        return liq_Prsat
+
+    def liq_dhsatdp(self, p):
+        liq_dhsatdp = torch.matmul(self.coeff_liq_dhsatdp, self.poly8(self.norm_psat(p)).T)
+        return liq_dhsatdp
+
+    def liq_dDsatdp(self, p):
+        liq_dDsatdp = torch.matmul(self.coeff_liq_dDsatdp, self.poly8(self.norm_psat(p)).T)
+        return liq_dDsatdp
+
+    # Vapor region properties
+    def vap_sph(self, p, h):
+        vap_sph = torch.matmul(self.coeff_vap_sph, self.poly55(self.norm_vap_p(p), self.norm_vap_h(h)).T)
+        return vap_sph
+
+    def vap_hps(self, p, s):
+        vap_hps = torch.matmul(self.coeff_vap_hps, self.poly55(self.norm_vap_p(p), self.norm_vap_s(s)).T)
+        return vap_hps
+
+    def vap_Dph(self, p, h):
+        vap_Dph = torch.matmul(self.coeff_vap_Dph, self.poly24(self.norm_vap_p(p), self.norm_vap_h(h)).T)
+        return vap_Dph
+
+    def vap_muph(self, p, h):
+        vap_muph = torch.matmul(self.coeff_vap_muph, self.poly52(self.norm_vap_p(p), self.norm_vap_h(h)).T)
+        return vap_muph
+
+    def vap_kph(self, p, h):
+        vap_kph = torch.matmul(self.coeff_vap_kph, self.poly54(self.norm_vap_p(p), self.norm_vap_h(h)).T)
+        return vap_kph
+
+    def vap_Cph(self, p, h):
+        vap_Cph = torch.matmul(self.coeff_vap_Cph, self.poly54(self.norm_vap_p(p), self.norm_vap_h(h)).T)
+        return vap_Cph
+
+    def vap_Tph(self, p, h):
+        vap_Tph = torch.matmul(self.coeff_vap_Tph, self.poly23(self.norm_vap_p(p), self.norm_vap_h(h)).T)
+        return vap_Tph
+
+    def vap_CpT(self, p, T):
+        vap_CpT = torch.matmul(self.coeff_vap_CpT, self.poly55(self.norm_vap_p(p), self.norm_vap_T(T)).T)
+        return vap_CpT
+
+    def vap_Prph(self, p, h):
+        vap_Prph = torch.matmul(self.coeff_vap_Prph, self.poly55(self.norm_vap_p(p), self.norm_vap_h(h)).T)
+        return vap_Prph
+
+    def vap_dsdp(self, p, h):
+        vap_dsdp = torch.matmul(self.coeff_vap_dsdp, self.poly45(self.norm_vap_p(p), self.norm_vap_h(h)).T)
+        return vap_dsdp
+
+    def vap_dsdh(self, p, h):
+        vap_dsdh = torch.matmul(self.coeff_vap_dsdh, self.poly54(self.norm_vap_p(p), self.norm_vap_h(h)).T)
+        return vap_dsdh
+
+    def vap_dhdp(self, p, s):
+        vap_dhdp = torch.matmul(self.coeff_vap_dhdp, self.poly45(self.norm_vap_p(p), self.norm_vap_s(s)).T)
+        return vap_dhdp
+
+    def vap_dhds(self, p, s):
+        vap_dhds = torch.matmul(self.coeff_vap_dhds, self.poly54(self.norm_vap_p(p), self.norm_vap_s(s)).T)
+        return vap_dhds
+
+    def vap_dDdp(self, p, h):
+        vap_dDdp = torch.matmul(self.coeff_vap_dDdp, self.poly14(self.norm_vap_p(p), self.norm_vap_h(h)).T)
+        return vap_dDdp
+
+    def vap_dDdh(self, p, h):
+        vap_dDdh = torch.matmul(self.coeff_vap_dDdh, self.poly23(self.norm_vap_p(p), self.norm_vap_h(h)).T)
+        return vap_dDdh
+
+    # Liquid region properties
+    def liq_Dph(self, p, h):
+        liq_Dph = torch.matmul(self.coeff_liq_Dph, self.poly25(self.norm_liq_p(p), self.norm_liq_h(h)).T)
+        return liq_Dph
+
+    def liq_muph(self, p, h):
+        liq_muph = torch.matmul(self.coeff_liq_muph, self.poly24(self.norm_liq_p(p), self.norm_liq_h(h)).T)
+        return liq_muph
+
+    def liq_kph(self, p, h):
+        liq_kph = torch.matmul(self.coeff_liq_kph, self.poly24(self.norm_liq_p(p), self.norm_liq_h(h)).T)
+        return liq_kph
+
+    def liq_Cph(self, p, h):
+        liq_Cph = torch.matmul(self.coeff_liq_Cph, self.poly24(self.norm_liq_p(p), self.norm_liq_h(h)).T)
+        return liq_Cph
+
+    def liq_Tph(self, p, h):
+        liq_Tph = torch.matmul(self.coeff_liq_Tph, self.poly24(self.norm_liq_p(p), self.norm_liq_h(h)).T)
+        return liq_Tph
+    
+    def liq_CpT(self, p, T):
+        liq_CpT = torch.matmul(self.coeff_liq_CpT, self.poly25(self.norm_liq_p(p), self.norm_liq_T(T)).T)
+        return liq_CpT
+
+    def liq_Prph(self, p, h):
+        liq_Prph = torch.matmul(self.coeff_liq_Prph, self.poly25(self.norm_liq_p(p), self.norm_liq_h(h)).T)
+        return liq_Prph
+
+    def liq_dDdp(self, p, h):
+        liq_dDdp = torch.matmul(self.coeff_liq_dDdp, self.poly15(self.norm_liq_p(p), self.norm_liq_h(h)).T)
+        return liq_dDdp
+
+    def liq_dDdh(self, p, h):
+        liq_dDdh = torch.matmul(self.coeff_liq_dDdh, self.poly24(self.norm_liq_p(p), self.norm_liq_h(h)).T)
+        return liq_dDdh
+    
+"""
+import casadi as ca
 
 class Refrigerant(object):
     def __init__(self, coefficients):
@@ -258,3 +509,4 @@ class Refrigerant(object):
     def liq_dDdh(self, p, h):
         liq_dDdh = self.coeff_liq_dDdh @ self.poly24(self.norm_liq_p(p), self.norm_liq_h(h))
         return liq_dDdh
+"""

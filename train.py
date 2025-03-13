@@ -29,7 +29,7 @@ CHECKPOINT = config["directories"]["checkpoint"]
 REF = config["directories"]["ref"]
 COOL = config["directories"]["cool"]
 
-# wandb.init(project='Heat exchanger', reinit=True, resume="never", config=config)
+wandb.init(project='Heat exchanger', reinit=True, resume="never", config=config)
 
 # load and split dataset
 train_ds = Paraloader(dir = PARA_DIR, sequence_length = SEQ_LEN)
@@ -62,9 +62,7 @@ for epoch in range(num_epochs):
     for batch in train_dl: 
         model_input, ground_truth = batch
         outputs = model(model_input)
-        xdot_model = 1
-        # xdot_model = torch.autograd.grad(outputs=outputs[0], outputs[1], inputs=x, grad_outputs=torch.ones_like(outputs), create_graph=True, retain_graph=True)[0]
-        train_loss = criterion(xdot_model, outputs, ground_truth)
+        train_loss = criterion(model_input, outputs, ground_truth, time_step=2) # 2 second interval data
 
         train_losses.append(train_loss.item())
         optimizer.zero_grad()
@@ -83,8 +81,10 @@ for epoch in range(num_epochs):
         print(f"Epoch {epoch+1}/{num_epochs} - Validation")
     for batch in val_dl:
         model_input, ground_truth = batch
-        outputs = model(model_input, ground_truth)
-        train_loss = criterion(model_input, outputs, ground_truth)
+        outputs = model(model_input)
+        val_loss = criterion(model_input, outputs, ground_truth, time_step=2)
+        val_losses.append(val_loss.item())
+
     mean_val_loss = mean(val_losses)
     wandb.log({"val_loss": mean_val_loss})
 

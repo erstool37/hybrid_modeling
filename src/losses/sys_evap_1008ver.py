@@ -1,8 +1,155 @@
-"""
+import torch
+import numpy as np
+from .utility import zero_one_scale, zero_one_descale
+
+class Evaporator(object):
+    
+    def __init__(self, Ref, Cool, *args):
+        self.process_type = "continuous"
+        
+        if args:
+            self.config = args[0]
+            self.seed = self.config.seed
+            self.hybrid = self.config.hybrid
+            self.np_data_type = self.config.np_data_type
+            self.time_interval = self.config.time_interval
+            self.terminal_time = self.config.terminal_time
+        else:
+            # print("No user-defined configuration, using implemented setting")
+            self.seed = 1999
+            self.hybrid = False
+            self.np_data_type = np.float64
+            self.time_interval = self.np_data_type(2)
+            self.terminal_time = self.np_data_type(1000)
+            
+        self.Ref = Ref
+        self.Cool = Cool
+        
+        # Dimension of variables
+        self.x_dim = 2 # pressure, outlet enthalpy
+        self.u_dim = 5 # inlet mass, outlet mass, inlet enthalpy, utils flow rate, T
+        self.y_dim = 2 
+        self.p_dim = 4 # LSTM outputs
+        
+        # Initial value of variables
+        self.x_ini = torch.tensor([250, 360], dtype=torch.float32)
+        self.u_ini = torch.tensor([0.02, 0.02, 275, 0.6, -7], dtype=torch.float32)
+        self.y_ini = torch.tensor([250, 360], dtype=torch.float32)
+        self.p_ini = torch.tensor([0.8, 0.9, 0.2, 0.3], dtype=torch.float32)
+        
+        # Minimum / maximum values of variaibles
+        self.x_min = torch.tensor([100., 270.], dtype=torch.float32)
+        self.x_max = torch.tensor([360., 380.], dtype=torch.float32)
+        
+        self.u_min = torch.tensor([0.01, 0.01, 163., 0.0001, -20.], dtype=torch.float32)
+        self.u_max = torch.tensor([0.05, 0.05, 365., 1.0000, +10.], dtype=torch.float32)
+        
+        self.y_min = torch.tensor([100., 270.], dtype=torch.float32)
+        self.y_max = torch.tensor([360., 380.], dtype=torch.float32)
+        
+        self.p_min = torch.tensor([0., 0., 0., 0.], dtype=torch.float32)
+        self.p_max = torch.tensor([1., 1., 1., 1.], dtype=torch.float32)
+        
+        self.scale_grad = 1. / (self.x_max - self.x_min)
+        
+        # Geometric parameters
+        self.width = 0.1
+        self.height = 0.005
+        self.length = 0.5
+        self.tubenum = 10
+        self.V_flow = self.width * self.height * self.length * self.tubenum
+        
+        self.A_inner = 2 * (self.width + self.height) * self.length * self.tubenum
+        self.A_outer = self.A_inner
+        
+        self.csa_ref = self.width * self.height * self.tubenum
+        self.csa_cool = self.width * self.height * self.tubenum
+        
+        self.dia_hydr_ref = 4 * self.csa_ref / (2 * (self.width + self.height) * self.tubenum)
+        self.dia_hydr_cool = 4 * self.csa_cool / (2 * (self.width + self.height) * self.tubenum)
+        
+        # Step function
+        self.step_fcn = self._make_step_function()
+
+    def go_step(self, x, u, p):
+        scaled_x = zero_one_scale(x, self.x_min, self.x_max)
+        scaled_u = zero_one_scale(u, self.u_min, self.u_max)
+        scaled_p = zero_one_scale(p, self.p_min, self.p_max)
+        scaled_up = torch.cat((scaled_u, scaled_p), dim=-1)
+
+        next_x = self.step_fcn(scaled_x, scaled_up)
+        next_x = zero_one_descale(next_x, self.x_min, self.x_max)
+        return next_x
+
+    def get_observation(self, x):
+        return x
+        
+    def do_reset(self):
+        return self.x_ini, self.u_ini, self.y_ini, self.p_ini
+    
+    def _system_dynamics(self, x, u, p):
+        pressure, h_ref_out = x.unsqueeze(-1)
+        m_ref_in, m_ref_out, h_ref_in, m_cool, T_cool_in = u.unsqueeze(-1)
+        z_tpsh, gamma, eps_tp, eps_sh = p.unsqueeze(-1)
+
+        hf = self.Ref.liq_hsat(pressure)
+        hg = self.Ref.vap_hsat(pressure)
+        dhf_dp = self.Ref.liq_dhsatdp(pressure)
+        dhg_dp = self.Ref.vap_dhsatdp(pressure)
+        Df = self.Ref.liq_Dsat(pressure)
+        Dg = self.Ref.vap_Dsat(pressure)
+        dDf_dp = self.Ref.liq_dDsatdp(pressure)
+        dDg_dp = self.Ref.vap_dDsatdp(pressure)
+
+        h_ref_sh = (hg + h_ref_out) / 2.0
+        D_ref_sh = self.Ref.vap_Dph(pressure, h_ref_sh)
+        dDdp_sh = self.Ref.vap_dDdp(pressure, h_ref_sh)
+        dDdh_sh = self.Ref.vap_dDdh(pressure, h_ref_sh)
+        Cp_ref_sh = self.Ref.vap_Cph(pressure, h_ref_sh)
+
+        Cp_cool = self.Cool.Cp(T_cool_in)
+
+        Tsat = self.Ref.Tsat(pressure)
+        T_ref_in_tp = Tsat
+        T_ref_in_sh = Tsat
+
+        mCp_ref_sh = m_ref_out * Cp_ref_sh
+        mCp_cool = m_cool * Cp_cool
+        Q_sh = eps_sh * mCp_ref_sh * (T_cool_in - T_ref_in_sh)
+        T_cool_mid = T_cool_in - Q_sh / mCp_cool
+        Q_tp = eps_tp * mCp_cool * (T_cool_mid - T_ref_in_tp)
+
+        dzdt_mb_coeff = - ((Dg - D_ref_sh) + (Df - Dg) * (1 - gamma))
+        dzdt_const = (m_ref_in - m_ref_out) / dzdt_mb_coeff / self.V_flow
+
+        mass00 = z_tpsh * ((1-gamma)*((hf-hg)*dDf_dp + Df*dhf_dp) + (gamma*Dg*dhg_dp) - 1)
+        mass01 = dzdt_const
+        mass10 = (1-z_tpsh) * ((h_ref_out-hg)*(dDdp_sh + dDdh_sh*dhg_dp/2) + D_ref_sh*dhg_dp/2 - 1)
+        mass11 = (1-z_tpsh) * ((h_ref_out-hg)*dDdh_sh + D_ref_sh) / 2
+
+        rhs0 = m_ref_in * (h_ref_in - hg) + Q_tp
+        rhs1 = m_ref_out * (hg - h_ref_out) + Q_sh    
+        mass = torch.stack([torch.stack([mass00, mass01]), torch.stack([mass10, mass11])]).squeeze(-1)
+        rhs = torch.stack([rhs0, rhs1])
+
+        # xdot0 = (mass11 * rhs0 - mass01 * rhs1) / (mass00 * mass11 - mass01 * mass10)
+        # xdot1 = (mass00 * rhs1 - mass10 * rhs0) / (mass00 * mass11 - mass01 * mass10)
+        # xdot = torch.stack([xdot0, xdot1], dim=-1) / self.V_flow
+
+        return mass, rhs
+    
+    def _make_step_function(self):
+        def step(x, up):
+            xdot = self._system_dynamics(x, up[:self.u_dim], up[self.u_dim:])
+            return x + xdot * self.time_interval
+        
+        return step
+
+"""()()
 Created on Fri Aug 30 18:51:43 2024
 
 @author: jisung
-"""
+
 
 import numpy as np
 import casadi as ca
@@ -207,3 +354,4 @@ class Evaporator(object):
         options = {'t0': 0, 'tf': self.time_interval}
         ode_integrator = ca.integrator("Integrator", "cvodes", ode, options)
         return ode_integrator
+"""
