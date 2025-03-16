@@ -1,4 +1,5 @@
 dataset_gen/
-dataset/
+dataset/optimized
+dataset/raw
 wandb/
 **/__pycache__/

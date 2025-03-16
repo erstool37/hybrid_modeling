@@ -6,16 +6,20 @@ from torch.utils.data import Dataset, DataLoader
 import numpy as np
 
 class Paraloader(Dataset):
-    def __init__(self, dir, sequence_length):
+    def __init__(self, dir, stats_dir, sequence_length):
         super().__init__()
-        self.dir = dir
         self.sequence_length = sequence_length
-        self.ds = pd.read_csv(self.dir)
+        self.ds = pd.read_csv(dir)
+        self.stats = pd.read_csv(stats_dir)
+
+        # normalize the dataset
+        for item in self.ds.columns: 
+            self.ds[item] = (self.ds[item].values - self.stats.loc[0, item]) / self.stats.loc[1,item]
 
         state = self.ds[['pressure', 'h_ref_out']].astype(float).values
         input = self.ds[['m_ref_in', 'm_ref_out', 'h_ref_in', 'm_cool', 'T_cool_in']].astype(float).values
         theta = self.ds[['z_tpsh', 'gamma', 'eps_tp', 'eps_sh']].astype(float).values
-
+        
         self.states = torch.tensor(state, dtype=torch.float32)
         self.inputs = torch.tensor(input, dtype=torch.float32)
         self.thetas = torch.tensor(theta, dtype=torch.float32)

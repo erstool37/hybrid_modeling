@@ -32,6 +32,7 @@ class Coolant_Evaporator(object):
     def mu(self, T):
         norm_T = self.norm_T(T)
         mu = self.coeff_mu[0] * torch.exp(-self.coeff_mu[1] * norm_T).squeeze(1)
+        print("mu", mu)
         return mu
     
     # Polynomial fit for k

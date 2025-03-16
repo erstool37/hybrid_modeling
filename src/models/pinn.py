@@ -6,6 +6,7 @@ class PINN(nn.Module):
         super(PINN, self).__init__()
         self.lstm = nn.LSTM(input_size=input_size, hidden_size=hidden_dim, num_layers=num_layers, batch_first=True)
         self.fc = nn.Linear(hidden_dim, output_size)
+        
     
     def forward(self, x):
         output, _ = self.lstm(x) # output: (batch_size, seq_len, hidden_dim)

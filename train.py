@@ -25,6 +25,7 @@ ALPHA = float(config["settings"]["alpha"])
 SEQ_LEN = int(config["settings"]["sequence_length"])
 
 PARA_DIR = config["directories"]["para_dir"]
+STATS_DIR = config["directories"]["stats_dir"]
 CHECKPOINT = config["directories"]["checkpoint"]
 REF = config["directories"]["ref"]
 COOL = config["directories"]["cool"]
@@ -32,11 +33,11 @@ COOL = config["directories"]["cool"]
 wandb.init(project='Heat exchanger', reinit=True, resume="never", config=config)
 
 # load and split dataset
-train_ds = Paraloader(dir = PARA_DIR, sequence_length = SEQ_LEN)
-val_ds = Paraloader(dir = PARA_DIR, sequence_length = SEQ_LEN)
+train_ds = Paraloader(dir = PARA_DIR, stats_dir=STATS_DIR, sequence_length = SEQ_LEN)
+val_ds = Paraloader(dir = PARA_DIR, stats_dir=STATS_DIR, sequence_length = SEQ_LEN)
 
 indices = np.arange(len(train_ds))
-train_idx, val_idx = train_test_split(indices, test_size=0.2, shuffle=False, random_state=37)
+train_idx, val_idx = train_test_split(indices, test_size=0.2, shuffle=False)
 
 train_ds = Subset(train_ds, train_idx)
 val_ds = Subset(val_ds, val_idx)
@@ -54,6 +55,9 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Training loop
 num_epochs = NUM_EPOCHS
+
+wandb.watch(model, criterion, log="all", log_freq=5)
+
 
 for epoch in range(num_epochs):
     model.train()

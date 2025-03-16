@@ -10,6 +10,7 @@ settings:
 
 directories:
   para_dir : 'dataset/dataset.csv'
+  stats_dir : 'dataset/statistics.csv'
   checkpoint : "src/models/PINN0310_01.pth" # freshly trained model name
   ref : 'dataset/reference'
   cool : 'dataset/cooling'
