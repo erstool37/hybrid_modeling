@@ -5,14 +5,15 @@ class Coolant_Evaporator(object):
     def __init__(self, coefficients):
         # Refrigerant property fitting coefficients
         self.coefficients = coefficients
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
-        self.coeff_Cp = torch.tensor(self.coefficients["Cp"], dtype=torch.float32)
-        self.coeff_D = torch.tensor(self.coefficients["D"], dtype=torch.float32)
-        self.coeff_mu = torch.tensor(self.coefficients["mu"].reshape(-1), dtype=torch.float32)
-        self.coeff_k = torch.tensor(self.coefficients["k"], dtype=torch.float32)
+        self.coeff_Cp = torch.tensor(self.coefficients["Cp"], dtype=torch.float32).to(self.device)
+        self.coeff_D = torch.tensor(self.coefficients["D"], dtype=torch.float32).to(self.device)
+        self.coeff_mu = torch.tensor(self.coefficients["mu"].reshape(-1), dtype=torch.float32).to(self.device)
+        self.coeff_k = torch.tensor(self.coefficients["k"], dtype=torch.float32).to(self.device)
 
-    def poly1(self, T): return torch.cat([T, torch.ones(len(T), 1)], dim=-1)
-    def poly2(self, T): return torch.cat([T**2, T, torch.ones(len(T), 1)], dim=-1)
+    def poly1(self, T): return torch.cat([T, torch.ones((len(T), 1), device=T.device)], dim=-1)
+    def poly2(self, T): return torch.cat([T**2, T, torch.ones((len(T), 1), device=T.device)], dim=-1)
 
     # Normalization function for temperature fitting
     def norm_T(self, T):

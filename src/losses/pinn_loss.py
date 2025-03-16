@@ -79,8 +79,7 @@ class PINN_Loss(nn.Module):
         ode_loss = F.mse_loss(ode_loss, target=torch.zeros_like(rhs))
         residual_loss = F.mse_loss(input=model_output[:, :2], target=ground_truth[:, :2])
 
-        print("ode",ode_loss, "residual",residual_loss)
         # alpha = (1-self.gamma) * alpha+ self.gamma * alpha 
-        total_loss =  residual_loss + 0.000001 * ode_loss 
+        total_loss =  residual_loss + 0.0001 * ode_loss 
 
         return total_loss

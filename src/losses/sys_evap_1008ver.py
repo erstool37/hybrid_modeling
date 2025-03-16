@@ -1,3 +1,9 @@
+"""
+Created on Fri Aug 30 18:51:43 2024
+
+@author: jisung
+"""
+
 import torch
 import numpy as np
 from .utility import zero_one_scale, zero_one_descale
@@ -153,12 +159,7 @@ class Evaporator(object):
         
         return step
 
-"""()()
-Created on Fri Aug 30 18:51:43 2024
-
-@author: jisung
-
-
+"""
 import numpy as np
 import casadi as ca
 from .utility import zero_one_scale, zero_one_descale

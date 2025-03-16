@@ -1,12 +1,13 @@
 settings:
-  batch_size : 32
+  batch_size : 1024
   num_workers : 0
-  num_epochs : 20
+  num_epochs : 60
   lr_rate : 5e-4
   hidden_dim : 128
   num_layers : 12
   alpha : 0.5
   sequence_length : 10
+  eta_min : 1e-8
 
 directories:
   para_dir : 'dataset/dataset.csv'
