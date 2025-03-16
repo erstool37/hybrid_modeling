@@ -57,7 +57,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 num_epochs = NUM_EPOCHS
 
 wandb.watch(model, criterion, log="all", log_freq=5)
-
+model.to(device)
 
 for epoch in range(num_epochs):
     model.train()
@@ -65,6 +65,8 @@ for epoch in range(num_epochs):
     print(f"Epoch {epoch+1}/{num_epochs} - Training ")
     for batch in train_dl: 
         model_input, ground_truth = batch
+        model_input = model_input.to(device)
+        ground_truth = ground_truth.to(device)
         outputs = model(model_input)
         train_loss = criterion(model_input, outputs, ground_truth, time_step=2) # 2 second interval data
 
@@ -86,6 +88,8 @@ for epoch in range(num_epochs):
     for batch in val_dl:
         model_input, ground_truth = batch
         outputs = model(model_input)
+        model_input = model_input.to(device)
+        ground_truth = ground_truth.to(device)
         val_loss = criterion(model_input, outputs, ground_truth, time_step=2)
         val_losses.append(val_loss.item())
 

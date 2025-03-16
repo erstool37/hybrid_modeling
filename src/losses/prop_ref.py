@@ -66,188 +66,180 @@ class Refrigerant(nn.Module):
     def norm_liq_p(self, x): return (x - 1984.0) / 880.9612
     def norm_liq_h(self, x): return (x - 212.5470) / 49.7295
     def norm_liq_T(self, x): return (x - 7.2744) / 36.7646
+    # def log_vec(self, x): return torch.cat([torch.log(x), torch.ones((len(x), 1))], dim=-1)
 
-    def poly7(self, x): return torch.cat([x**i for i in range(7, -1, -1)], dim=-1)
-    def poly8(self, x): return torch.cat([x**i for i in range(8, -1, -1)], dim=-1)
-    def poly9(self, x): return torch.cat([x**i for i in range(9, -1, -1)], dim=-1)
-    def poly14(self, x, y): return torch.cat([torch.tensor([1.0], device=x.device), x, y, x*y, y**2, x*(y**2), y**3, x*(y**3), y**4], dim=-1)
-    def poly15(self, x, y): return torch.cat([torch.tensor([1.0], device=x.device), x, y, x*y, y**2, x*(y**2), y**3, x*(y**3), y**4, x*(y**4), y**5], dim=-1)
-    def poly23(self, x, y): return torch.cat([torch.tensor([1.0], device=x.device), x, y, x**2, x*y, y**2, x**2*y, x*y**2, y**3], dim=-1)
-    def poly24(self, x, y): return torch.cat([torch.tensor([1.0], device=x.device), x, y, x**2, x*y, y**2, x**2*y, x*y**2, y**3, x**2*y**2, x*y**3, y**4], dim=-1)
-    def poly25(self, x, y): return torch.cat([torch.tensor([1.0], device=x.device), x, y, x**2, x*y, y**2, x**2*y, x*y**2, y**3, x**2*y**2, x*y**3, y**4, x**2*y**3, x*y**4, y**5], dim=-1)
-    def poly45(self, x, y): return torch.cat([torch.tensor([1.0], device=x.device), x, y, x**2, x*y, y**2, x**3, x**2*y, x*y**2, y**3, x**4, x**3*y, x**2*y**2, x*y**3, y**4, x**4*y, x**3*y**2, x**2*y**3, x*y**4, y**5], dim=-1)
-    def poly52(self, x, y): return torch.cat([torch.tensor([1.0], device=x.device), x, y, x**2, x*y, y**2, x**3, x**2*y, x*y**2, x**4, x**3*y, x**2*y**2, x**5, x**4*y, x**3*y**2], dim=-1)
-    def poly54(self, x, y): return torch.cat([torch.tensor([1.0], device=x.device), x, y, x**2, x*y, y**2, x**3, x**2*y, x*y**2, y**3, x**4, x**3*y, x**2*y**2, x*y**3, y**4, x**5, x**4*y, x**3*y**2, x**2*y**3, x*y**4], dim=-1)
-    def poly55(self, x, y): return torch.cat([torch.tensor([1.0], device=x.device), x, y, x**2, x*y, y**2, x**3, x**2*y, x*y**2, y**3, x**4, x**3*y, x**2*y**2, x*y**3, y**4, x**5, x**4*y, x**3*y**2, x**2*y**3, x*y**4, y**5], dim=-1)
-    
+    def poly7(self, x): return torch.cat([x**7, x**6, x**5, x**4, x**3, x**2, x,torch.ones((len(x), 1))], dim=-1)
+    def poly8(self, x): return torch.cat([x**8, x**7, x**6, x**5, x**4, x**3, x**2, x,torch.ones((len(x), 1))], dim=-1)
+    def poly9(self, x): return torch.cat([x**9, x**8, x**7, x**6, x**5, x**4, x**3, x**2, x,torch.ones((len(x), 1))], dim=-1)
+    def poly14(self, x, y): return torch.cat([torch.ones((len(x), 1)), x, y, x*y, y**2, x*(y**2), y**3, x*(y**3), y**4], dim=-1)
+    def poly15(self, x, y): return torch.cat([torch.ones((len(x), 1)), x, y, x*y, y**2, x*(y**2), y**3, x*(y**3), y**4, x*(y**4), y**5], dim=-1)
+    def poly23(self, x, y): return torch.cat([torch.ones((len(x), 1)), x, y, x**2, x*y, y**2, x**2*y, x*y**2, y**3], dim=-1)
+    def poly24(self, x, y): return torch.cat([torch.ones((len(x), 1)), x, y, x**2, x*y, y**2, x**2*y, x*y**2, y**3, x**2*y**2, x*y**3, y**4], dim=-1)
+    def poly25(self, x, y): return torch.cat([torch.ones((len(x), 1)), x, y, x**2, x*y, y**2, x**2*y, x*y**2, y**3, x**2*y**2, x*y**3, y**4, x**2*y**3, x*y**4, y**5], dim=-1)
+    def poly45(self, x, y): return torch.cat([torch.ones((len(x), 1)), x, y, x**2, x*y, y**2, x**3, x**2*y, x*y**2, y**3, x**4, x**3*y, x**2*y**2, x*y**3, y**4, x**4*y, x**3*y**2, x**2*y**3, x*y**4, y**5], dim=-1)
+    def poly52(self, x, y): return torch.cat([torch.ones((len(x), 1)), x, y, x**2, x*y, y**2, x**3, x**2*y, x*y**2, x**4, x**3*y, x**2*y**2, x**5, x**4*y, x**3*y**2], dim=-1)
+    def poly54(self, x, y): return torch.cat([torch.ones((len(x), 1)), x, y, x**2, x*y, y**2, x**3, x**2*y, x*y**2, y**3, x**4, x**3*y, x**2*y**2, x*y**3, y**4, x**5, x**4*y, x**3*y**2, x**2*y**3, x*y**4], dim=-1)
+    def poly55(self, x, y): return torch.cat([torch.ones((len(x), 1)), x, y, x**2, x*y, y**2, x**3, x**2*y, x*y**2, y**3, x**4, x**3*y, x**2*y**2, x*y**3, y**4, x**5, x**4*y, x**3*y**2, x**2*y**3, x*y**4, y**5], dim=-1)
 
     # Saturation properties
-    def Tsat(self, p):
+    def Tsat(self, p): # Caution, log used, wrong gradients might lead to NaN
         a, b, c = self.coeff_Tsat
         Tsat = b / (a - torch.log10(p)) - c
         return Tsat
-
+    
     def vap_hsat(self, p):
-        vap_hsat = torch.matmul(self.coeff_vap_hsat, self.poly8(self.norm_psat(p)).T)
-        return vap_hsat
+        vap_hsat = torch.bmm(self.coeff_vap_hsat.unsqueeze(0).repeat(len(p),1,1), self.poly8(self.norm_psat(p)).unsqueeze(-1))
+        return vap_hsat.squeeze(-1)
 
     def vap_Dsat(self, p):
-        vap_Dsat = torch.matmul(self.coeff_vap_Dsat, self.poly9(self.norm_psat(p)).T)
-        return vap_Dsat
+        vap_Dsat = torch.bmm(self.coeff_vap_Dsat.unsqueeze(0).repeat(len(p),1,1), self.poly9(self.norm_psat(p)).unsqueeze(-1))
+        return vap_Dsat.squeeze(-1)
 
     def vap_musat(self, p):
-        vap_musat = torch.matmul(self.coeff_vap_musat, self.poly9(self.norm_psat(p)).T)
-        return vap_musat
+        vap_musat = torch.bmm(self.coeff_vap_musat.unsqueeze(0).repeat(len(p),1,1), self.poly9(self.norm_psat(p)).unsqueeze(-1))
+        return vap_musat.squeeze(-1)
 
     def vap_ksat(self, p):
-        vap_ksat = torch.matmul(self.coeff_vap_ksat, self.poly9(self.norm_psat(p)).T)
-        return vap_ksat
+        vap_ksat = torch.bmm(self.coeff_vap_ksat.unsqueeze(0).repeat(len(p),1,1), self.poly9(self.norm_psat(p)).unsqueeze(-1))
+        return vap_ksat.squeeze(-1)
 
     def vap_Cpsat(self, p):
-        vap_Cpsat = torch.matmul(self.coeff_vap_Cpsat, self.poly9(self.norm_psat(p)).T)
-        return vap_Cpsat
+        vap_Cpsat = torch.bmm(self.coeff_vap_Cpsat.unsqueeze(0).repeat(len(p),1,1), self.poly9(self.norm_psat(p)).unsqueeze(-1))
+        return vap_Cpsat.squeeze(-1)
 
     def vap_Prsat(self, p):
-        vap_Prsat = torch.matmul(self.coeff_vap_Prsat, self.poly9(self.norm_psat(p)).T)
-        return vap_Prsat
+        vap_Prsat = torch.bmm(self.coeff_vap_Prsat.unsqueeze(0).repeat(len(p),1,1), self.poly9(self.norm_psat(p)).unsqueeze(-1))
+        return vap_Prsat.squeeze(-1)
 
     def vap_dhsatdp(self, p):
-        vap_dhsatdp = torch.matmul(self.coeff_vap_dhsatdp, self.poly7(self.norm_psat(p)).T)
-        return vap_dhsatdp
+        vap_dhsatdp = torch.bmm(self.coeff_vap_dhsatdp.unsqueeze(0).repeat(len(p),1,1), self.poly7(self.norm_psat(p)).unsqueeze(-1))
+        return vap_dhsatdp.squeeze(-1)
 
     def vap_dDsatdp(self, p):
-        vap_dDsatdp = torch.matmul(self.coeff_vap_dDsatdp, self.poly8(self.norm_psat(p)).T)
-        return vap_dDsatdp
+        vap_dDsatdp = torch.bmm(self.coeff_vap_dDsatdp.unsqueeze(0).repeat(len(p),1,1), self.poly8(self.norm_psat(p)).unsqueeze(-1))
+        return vap_dDsatdp.squeeze(-1)
 
     def liq_hsat(self, p):
-        liq_hsat = torch.matmul(self.coeff_liq_hsat, self.poly9(self.norm_psat(p)).T)
-        return liq_hsat
+        liq_hsat = torch.bmm(self.coeff_liq_hsat.unsqueeze(0).repeat(len(p),1,1), self.poly9(self.norm_psat(p)).unsqueeze(-1))
+        return liq_hsat.squeeze(-1)
 
     def liq_Dsat(self, p):
-        liq_Dsat = torch.matmul(self.coeff_liq_Dsat, self.poly9(self.norm_psat(p)).T)
-        return liq_Dsat
+        liq_Dsat = torch.bmm(self.coeff_liq_Dsat.unsqueeze(0).repeat(len(p),1,1), self.poly9(self.norm_psat(p)).unsqueeze(-1))
+        return liq_Dsat.squeeze(-1)
 
     def liq_musat(self, p):
-        liq_musat = torch.matmul(self.coeff_liq_musat, self.poly9(self.norm_psat(p)).T)
-        return liq_musat
+        liq_musat = torch.bmm(self.coeff_liq_musat.unsqueeze(0).repeat(len(p),1,1), self.poly9(self.norm_psat(p)).unsqueeze(-1))
+        return liq_musat.squeeze(-1)
 
     def liq_ksat(self, p):
-        liq_ksat = torch.matmul(self.coeff_liq_ksat, self.poly8(self.norm_psat(p)).T)
-        return liq_ksat
+        liq_ksat = torch.bmm(self.coeff_liq_ksat.unsqueeze(0).repeat(len(p),1,1), self.poly8(self.norm_psat(p)).unsqueeze(-1))
+        return liq_ksat.squeeze(-1)
 
     def liq_Cpsat(self, p):
-        liq_Cpsat = torch.matmul(self.coeff_liq_Cpsat, self.poly9(self.norm_psat(p)).T)
-        return liq_Cpsat
+        liq_Cpsat = torch.bmm(self.coeff_liq_Cpsat.unsqueeze(0).repeat(len(p),1,1), self.poly9(self.norm_psat(p)).unsqueeze(-1))
+        return liq_Cpsat.squeeze(-1)
 
     def liq_Prsat(self, p):
-        liq_Prsat = torch.matmul(self.coeff_liq_Prsat, self.poly8(self.norm_psat(p)).T)
-        return liq_Prsat
+        liq_Prsat = torch.bmm(self.coeff_liq_Prsat.unsqueeze(0).repeat(len(p),1,1), self.poly8(self.norm_psat(p)).unsqueeze(-1))
+        return liq_Prsat.squeeze(-1)
 
     def liq_dhsatdp(self, p):
-        liq_dhsatdp = torch.matmul(self.coeff_liq_dhsatdp, self.poly8(self.norm_psat(p)).T)
-        return liq_dhsatdp
+        liq_dhsatdp = torch.bmm(self.coeff_liq_dhsatdp.unsqueeze(0).repeat(len(p),1,1), self.poly8(self.norm_psat(p)).unsqueeze(-1))
+        return liq_dhsatdp.squeeze(-1)
 
     def liq_dDsatdp(self, p):
-        liq_dDsatdp = torch.matmul(self.coeff_liq_dDsatdp, self.poly8(self.norm_psat(p)).T)
-        return liq_dDsatdp
+        liq_dDsatdp = torch.bmm(self.coeff_liq_dDsatdp.unsqueeze(0).repeat(len(p),1,1), self.poly8(self.norm_psat(p)).unsqueeze(-1))
+        return liq_dDsatdp.squeeze(-1)
 
     # Vapor region properties
     def vap_sph(self, p, h):
-        vap_sph = torch.matmul(self.coeff_vap_sph, self.poly55(self.norm_vap_p(p), self.norm_vap_h(h)).T)
-        return vap_sph
+        vap_sph = torch.bmm(self.coeff_vap_sph.unsqueeze(0).repeat(len(p),1,1), self.poly55(self.norm_vap_p(p), self.norm_vap_h(h)).unsqueeze(-1))
+        return vap_sph.squeeze(-1)
 
     def vap_hps(self, p, s):
-        vap_hps = torch.matmul(self.coeff_vap_hps, self.poly55(self.norm_vap_p(p), self.norm_vap_s(s)).T)
-        return vap_hps
+        vap_hps = torch.bmm(self.coeff_vap_hps.unsqueeze(0).repeat(len(p),1,1), self.poly55(self.norm_vap_p(p), self.norm_vap_s(s)).unsqueeze(-1))
+        return vap_hps.squeeze(-1)
 
     def vap_Dph(self, p, h):
-        vap_Dph = torch.matmul(self.coeff_vap_Dph, self.poly24(self.norm_vap_p(p), self.norm_vap_h(h)).T)
-        return vap_Dph
+        vap_Dph = torch.bmm(self.coeff_vap_Dph.unsqueeze(0).repeat(len(p),1,1), self.poly24(self.norm_vap_p(p), self.norm_vap_h(h)).unsqueeze(-1))
+        return vap_Dph.squeeze(-1)
 
     def vap_muph(self, p, h):
-        vap_muph = torch.matmul(self.coeff_vap_muph, self.poly52(self.norm_vap_p(p), self.norm_vap_h(h)).T)
-        return vap_muph
+        vap_muph = torch.bmm(self.coeff_vap_muph.unsqueeze(0).repeat(len(p),1,1), self.poly52(self.norm_vap_p(p), self.norm_vap_h(h)).unsqueeze(-1))
+        return vap_muph.squeeze(-1)
 
     def vap_kph(self, p, h):
-        vap_kph = torch.matmul(self.coeff_vap_kph, self.poly54(self.norm_vap_p(p), self.norm_vap_h(h)).T)
-        return vap_kph
+        vap_kph = torch.bmm(self.coeff_vap_kph.unsqueeze(0).repeat(len(p),1,1), self.poly54(self.norm_vap_p(p), self.norm_vap_h(h)).unsqueeze(-1))
+        return vap_kph.squeeze(-1)
 
     def vap_Cph(self, p, h):
-        vap_Cph = torch.matmul(self.coeff_vap_Cph, self.poly54(self.norm_vap_p(p), self.norm_vap_h(h)).T)
-        return vap_Cph
+        vap_Cph = torch.bmm(self.coeff_vap_Cph.unsqueeze(0).repeat(len(p),1,1), self.poly54(self.norm_vap_p(p), self.norm_vap_h(h)).unsqueeze(-1))
+        return vap_Cph.squeeze(-1)
 
     def vap_Tph(self, p, h):
-        vap_Tph = torch.matmul(self.coeff_vap_Tph, self.poly23(self.norm_vap_p(p), self.norm_vap_h(h)).T)
-        return vap_Tph
+        vap_Tph = torch.bmm(self.coeff_vap_Tph.unsqueeze(0).repeat(len(p),1,1), self.poly23(self.norm_vap_p(p), self.norm_vap_h(h)).unsqueeze(-1))
+        return vap_Tph.squeeze(-1)
 
     def vap_CpT(self, p, T):
-        vap_CpT = torch.matmul(self.coeff_vap_CpT, self.poly55(self.norm_vap_p(p), self.norm_vap_T(T)).T)
-        return vap_CpT
+        vap_CpT = torch.bmm(self.coeff_vap_CpT.unsqueeze(0).repeat(len(p),1,1), self.poly55(self.norm_vap_p(p), self.norm_vap_T(T)).unsqueeze(-1))
+        return vap_CpT.squeeze(-1)
 
     def vap_Prph(self, p, h):
-        vap_Prph = torch.matmul(self.coeff_vap_Prph, self.poly55(self.norm_vap_p(p), self.norm_vap_h(h)).T)
-        return vap_Prph
+        vap_Prph = torch.bmm(self.coeff_vap_Prph.unsqueeze(0).repeat(len(p),1,1), self.poly55(self.norm_vap_p(p), self.norm_vap_h(h)).unsqueeze(-1))
+        return vap_Prph.squeeze(-1)
 
     def vap_dsdp(self, p, h):
-        vap_dsdp = torch.matmul(self.coeff_vap_dsdp, self.poly45(self.norm_vap_p(p), self.norm_vap_h(h)).T)
-        return vap_dsdp
+        vap_dsdp = torch.bmm(self.coeff_vap_dsdp.unsqueeze(0).repeat(len(p),1,1), self.poly45(self.norm_vap_p(p), self.norm_vap_h(h)).unsqueeze(-1))
+        return vap_dsdp.squeeze(-1)
 
     def vap_dsdh(self, p, h):
-        vap_dsdh = torch.matmul(self.coeff_vap_dsdh, self.poly54(self.norm_vap_p(p), self.norm_vap_h(h)).T)
-        return vap_dsdh
+        vap_dsdh = torch.bmm(self.coeff_vap_dsdh.unsqueeze(0).repeat(len(p),1,1), self.poly54(self.norm_vap_p(p), self.norm_vap_h(h)).unsqueeze(-1))
+        return vap_dsdh.squeeze(-1)
 
     def vap_dhdp(self, p, s):
-        vap_dhdp = torch.matmul(self.coeff_vap_dhdp, self.poly45(self.norm_vap_p(p), self.norm_vap_s(s)).T)
-        return vap_dhdp
+        vap_dhdp = torch.bmm(self.coeff_vap_dhdp.unsqueeze(0).repeat(len(p),1,1), self.poly45(self.norm_vap_p(p), self.norm_vap_s(s)).unsqueeze(-1))
+        return vap_dhdp.squeeze(-1)
 
     def vap_dhds(self, p, s):
-        vap_dhds = torch.matmul(self.coeff_vap_dhds, self.poly54(self.norm_vap_p(p), self.norm_vap_s(s)).T)
-        return vap_dhds
+        vap_dhds = torch.bmm(self.coeff_vap_dhds.unsqueeze(0).repeat(len(p),1,1), self.poly54(self.norm_vap_p(p), self.norm_vap_s(s)).unsqueeze(-1))
+        return vap_dhds.squeeze(-1)
 
     def vap_dDdp(self, p, h):
-        vap_dDdp = torch.matmul(self.coeff_vap_dDdp, self.poly14(self.norm_vap_p(p), self.norm_vap_h(h)).T)
-        return vap_dDdp
+        vap_dDdp = torch.bmm(self.coeff_vap_dDdp.unsqueeze(0).repeat(len(p),1,1), self.poly14(self.norm_vap_p(p), self.norm_vap_h(h)).unsqueeze(-1))
+        return vap_dDdp.squeeze(-1)
 
     def vap_dDdh(self, p, h):
-        vap_dDdh = torch.matmul(self.coeff_vap_dDdh, self.poly23(self.norm_vap_p(p), self.norm_vap_h(h)).T)
-        return vap_dDdh
+        vap_dDdh = torch.bmm(self.coeff_vap_dDdh.unsqueeze(0).repeat(len(p),1,1), self.poly23(self.norm_vap_p(p), self.norm_vap_h(h)).unsqueeze(-1))
+        return vap_dDdh.squeeze(-1)
 
     # Liquid region properties
     def liq_Dph(self, p, h):
-        liq_Dph = torch.matmul(self.coeff_liq_Dph, self.poly25(self.norm_liq_p(p), self.norm_liq_h(h)).T)
-        return liq_Dph
+        return torch.bmm(self.coeff_liq_Dph.unsqueeze(0).repeat(len(p),1,1), self.poly25(self.norm_liq_p(p), self.norm_liq_h(h)).unsqueeze(-1)).squeeze(-1)
 
     def liq_muph(self, p, h):
-        liq_muph = torch.matmul(self.coeff_liq_muph, self.poly24(self.norm_liq_p(p), self.norm_liq_h(h)).T)
-        return liq_muph
+        return torch.bmm(self.coeff_liq_muph.unsqueeze(0).repeat(len(p),1,1), self.poly24(self.norm_liq_p(p), self.norm_liq_h(h)).unsqueeze(-1)).squeeze(-1)
 
     def liq_kph(self, p, h):
-        liq_kph = torch.matmul(self.coeff_liq_kph, self.poly24(self.norm_liq_p(p), self.norm_liq_h(h)).T)
-        return liq_kph
+        return torch.bmm(self.coeff_liq_kph.unsqueeze(0).repeat(len(p),1,1), self.poly24(self.norm_liq_p(p), self.norm_liq_h(h)).unsqueeze(-1)).squeeze(-1)
 
     def liq_Cph(self, p, h):
-        liq_Cph = torch.matmul(self.coeff_liq_Cph, self.poly24(self.norm_liq_p(p), self.norm_liq_h(h)).T)
-        return liq_Cph
+        return torch.bmm(self.coeff_liq_Cph.unsqueeze(0).repeat(len(p),1,1), self.poly24(self.norm_liq_p(p), self.norm_liq_h(h)).unsqueeze(-1)).squeeze(-1)
 
     def liq_Tph(self, p, h):
-        liq_Tph = torch.matmul(self.coeff_liq_Tph, self.poly24(self.norm_liq_p(p), self.norm_liq_h(h)).T)
-        return liq_Tph
-    
+        return torch.bmm(self.coeff_liq_Tph.unsqueeze(0).repeat(len(p),1,1), self.poly24(self.norm_liq_p(p), self.norm_liq_h(h)).unsqueeze(-1)).squeeze(-1)
+
     def liq_CpT(self, p, T):
-        liq_CpT = torch.matmul(self.coeff_liq_CpT, self.poly25(self.norm_liq_p(p), self.norm_liq_T(T)).T)
-        return liq_CpT
+        return torch.bmm(self.coeff_liq_CpT.unsqueeze(0).repeat(len(p),1,1), self.poly25(self.norm_liq_p(p), self.norm_liq_T(T)).unsqueeze(-1)).squeeze(-1)
 
     def liq_Prph(self, p, h):
-        liq_Prph = torch.matmul(self.coeff_liq_Prph, self.poly25(self.norm_liq_p(p), self.norm_liq_h(h)).T)
-        return liq_Prph
+        return torch.bmm(self.coeff_liq_Prph.unsqueeze(0).repeat(len(p),1,1), self.poly25(self.norm_liq_p(p), self.norm_liq_h(h)).unsqueeze(-1)).squeeze(-1)
 
     def liq_dDdp(self, p, h):
-        liq_dDdp = torch.matmul(self.coeff_liq_dDdp, self.poly15(self.norm_liq_p(p), self.norm_liq_h(h)).T)
-        return liq_dDdp
+        return torch.bmm(self.coeff_liq_dDdp.unsqueeze(0).repeat(len(p),1,1), self.poly15(self.norm_liq_p(p), self.norm_liq_h(h)).unsqueeze(-1)).squeeze(-1)
 
     def liq_dDdh(self, p, h):
-        liq_dDdh = torch.matmul(self.coeff_liq_dDdh, self.poly24(self.norm_liq_p(p), self.norm_liq_h(h)).T)
-        return liq_dDdh
+        return torch.bmm(self.coeff_liq_dDdh.unsqueeze(0).repeat(len(p),1,1), self.poly24(self.norm_liq_p(p), self.norm_liq_h(h)).unsqueeze(-1)).squeeze(-1)
+
     
 """
 import casadi as ca

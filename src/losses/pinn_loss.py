@@ -46,46 +46,41 @@ class PINN_Loss(nn.Module):
         p_true, h_ref_out_true = ground_truth[:, :2].T.unsqueeze(-1) # True next time step state variables
         p_pred, h_ref_out_pred = model_output[:, :2].T.unsqueeze(-1) # Predicted next time step state variables
         zeta, gamma, eps_tp, eps_sh = model_output[:, 2:].T.unsqueeze(-1) # Predicted present time step hidden parameters
-        
-        # balance_loss calculated
-        balance_losses = []
-        for idx in range(len(model_output)):
-            # unnnormalize the data
-            p_input_un = self._unnormalize(p_input[idx], "pressure")
-            h_ref_out_input_un = self._unnormalize(h_ref_out_input[idx], "h_ref_out")
-            m_ref_in_un = self._unnormalize(m_ref_in[idx], "m_ref_in")
-            m_ref_out_un = self._unnormalize(m_ref_out[idx], "m_ref_out")
-            h_ref_in_un = self._unnormalize(h_ref_in[idx], "h_ref_in")
-            m_cool_un = self._unnormalize(m_cool[idx], "m_cool")
-            T_cool_in_un = self._unnormalize(T_cool_in[idx], "T_cool_in")
-            zeta_un = self._unnormalize(zeta[idx], "z_tpsh")
-            gamma_un = self._unnormalize(gamma[idx], "gamma")
-            eps_tp_un = self._unnormalize(eps_tp[idx], "eps_tp")
-            eps_sh_un = self._unnormalize(eps_sh[idx], "eps_sh")
-            p_pred_un = self._unnormalize(p_pred[idx], "pressure")
-            h_ref_out_pred_un = self._unnormalize(h_ref_out_pred[idx], "h_ref_out")
+
+        # ODE based loss calculation
+        p_input_un = self._unnormalize(p_input, "pressure")
+        h_ref_out_input_un = self._unnormalize(h_ref_out_input, "h_ref_out")
+        m_ref_in_un = self._unnormalize(m_ref_in, "m_ref_in")
+        m_ref_out_un = self._unnormalize(m_ref_out, "m_ref_out")
+        h_ref_in_un = self._unnormalize(h_ref_in, "h_ref_in")
+        m_cool_un = self._unnormalize(m_cool, "m_cool")
+        T_cool_in_un = self._unnormalize(T_cool_in, "T_cool_in")
+        zeta_un = self._unnormalize(zeta, "z_tpsh")
+        gamma_un = self._unnormalize(gamma, "gamma")
+        eps_tp_un = self._unnormalize(eps_tp, "eps_tp")
+        eps_sh_un = self._unnormalize(eps_sh, "eps_sh")
+        p_pred_un = self._unnormalize(p_pred, "pressure")
+        h_ref_out_pred_un = self._unnormalize(h_ref_out_pred, "h_ref_out") # (batch_size, 1)
             
-            x = torch.cat((p_pred_un, h_ref_out_pred_un), dim=0)
-            u = torch.cat((m_ref_in_un, m_ref_out_un, h_ref_in_un, m_cool_un, T_cool_in_un), dim=0)
-            p = torch.cat((zeta_un, gamma_un, eps_tp_un, eps_sh_un), dim=0)
+        x = torch.cat((p_pred_un, h_ref_out_pred_un), dim=-1)
+        u = torch.cat((m_ref_in_un, m_ref_out_un, h_ref_in_un, m_cool_un, T_cool_in_un), dim=-1)
+        p = torch.cat((zeta_un, gamma_un, eps_tp_un, eps_sh_un), dim=-1)
 
-            mass, rhs = self._Evaporator(x, u, p) # mass, rhs is calculated based on correct answers.
-            mass = mass.detach()
-            rhs = rhs.detach()
+        mass, rhs = self._Evaporator(x, u, p) 
+        mass = mass.detach() # (batch_size, 2, 2)
+        rhs = rhs.detach().unsqueeze(-1) # (batch_size, 2, 1)
 
-            dp_dt_mod = (p_pred_un - p_input_un) / time_step
-            dh_dt_mod = (h_ref_out_pred_un - h_ref_out_input_un) / time_step
-            dx_dt_mod = torch.cat((dp_dt_mod, dh_dt_mod), dim=0).unsqueeze(-1) # (2,1)
+        dp_dt_mod = (p_pred_un - p_input_un) / time_step # (batch_size, 1)
+        dh_dt_mod = (h_ref_out_pred_un - h_ref_out_input_un) / time_step # (batch_size, 1)
+        dx_dt_mod = torch.cat((dp_dt_mod, dh_dt_mod), dim=-1).unsqueeze(-1) # (batch_size, 2, 1)
 
-            balance_loss = (torch.matmul(mass, dx_dt_mod) - rhs) ** 2
-            balance_losses.append(balance_loss)
-            
-        balance_loss = torch.stack(balance_losses).mean() 
+        ode_loss = torch.bmm(mass, dx_dt_mod) - rhs
+
+        ode_loss = F.mse_loss(ode_loss, target=torch.zeros_like(rhs))
         residual_loss = F.mse_loss(input=model_output[:, :2], target=ground_truth[:, :2])
 
-        print("loss", balance_loss, residual_loss)
-
+        print("ode",ode_loss, "residual",residual_loss)
         # alpha = (1-self.gamma) * alpha+ self.gamma * alpha 
-        total_loss =  residual_loss + 0.000001 * balance_loss 
+        total_loss =  residual_loss + 0.000001 * ode_loss 
 
         return total_loss

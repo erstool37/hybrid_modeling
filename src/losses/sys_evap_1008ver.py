@@ -88,9 +88,17 @@ class Evaporator(object):
         return self.x_ini, self.u_ini, self.y_ini, self.p_ini
     
     def _system_dynamics(self, x, u, p):
-        pressure, h_ref_out = x.unsqueeze(-1)
-        m_ref_in, m_ref_out, h_ref_in, m_cool, T_cool_in = u.unsqueeze(-1)
-        z_tpsh, gamma, eps_tp, eps_sh = p.unsqueeze(-1)
+        pressure = x[:,0].unsqueeze(-1)
+        h_ref_out = x[:,1].unsqueeze(-1)
+        m_ref_in = u[:,0].unsqueeze(-1)
+        m_ref_out = u[:,1].unsqueeze(-1)
+        h_ref_in = u[:,2].unsqueeze(-1)
+        m_cool = u[:,3].unsqueeze(-1)
+        T_cool_in = u[:,4].unsqueeze(-1)
+        z_tpsh = p[:,0].unsqueeze(-1)
+        gamma = p[:,1].unsqueeze(-1)
+        eps_tp = p[:,2].unsqueeze(-1)
+        eps_sh = p[:,3].unsqueeze(-1)
 
         hf = self.Ref.liq_hsat(pressure)
         hg = self.Ref.vap_hsat(pressure)
@@ -129,8 +137,8 @@ class Evaporator(object):
 
         rhs0 = m_ref_in * (h_ref_in - hg) + Q_tp
         rhs1 = m_ref_out * (hg - h_ref_out) + Q_sh    
-        mass = torch.stack([torch.stack([mass00, mass01]), torch.stack([mass10, mass11])]).squeeze(-1)
-        rhs = torch.stack([rhs0, rhs1])
+        mass = torch.stack([torch.cat([mass00, mass01], dim=-1), torch.cat([mass10, mass11], dim=-1)], dim=1)
+        rhs = torch.cat([rhs0, rhs1], dim=-1)  # shape: (batch, 2)
 
         # xdot0 = (mass11 * rhs0 - mass01 * rhs1) / (mass00 * mass11 - mass01 * mass10)
         # xdot1 = (mass00 * rhs1 - mass10 * rhs0) / (mass00 * mass11 - mass01 * mass10)
