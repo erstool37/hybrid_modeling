@@ -21,9 +21,8 @@ NUM_EPOCHS = int(config["settings"]["num_epochs"])
 LR_RATE = float(config["settings"]["lr_rate"])
 HIDDEN_DIM = int(config["settings"]["hidden_dim"])
 NUM_LAYERS = int(config["settings"]["num_layers"])
-ALPHA = float(config["settings"]["alpha"])
+RATE= float(config["settings"]["rate"])
 SEQ_LEN = int(config["settings"]["sequence_length"])
-ETA_MIN = float(config["settings"]["eta_min"])
 
 PARA_DIR = config["directories"]["para_dir"]
 STATS_DIR = config["directories"]["stats_dir"]
@@ -48,15 +47,16 @@ val_dl = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=NU
 
 # Initialize model, loss, scheduler, and optimizer
 model = PINN(input_size=7, hidden_dim=HIDDEN_DIM, num_layers=NUM_LAYERS, output_size=6)
-criterion = PINN_Loss(alpha = ALPHA)
+criterion = PINN_Loss(rate=RATE, model = model)
 
 optimizer = optim.Adam(model.parameters(), lr=LR_RATE)
-scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=NUM_EPOCHS, eta_min=ETA_MIN)
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=NUM_EPOCHS, eta_min=1e-7)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 # Training loop
 num_epochs = NUM_EPOCHS
 
-wandb.watch(model, criterion, log="all", log_freq=5)
+# wandb.watch(model, criterion, log="all", log_freq=5)
 model.to(device)
 
 for epoch in range(num_epochs):
@@ -72,11 +72,11 @@ for epoch in range(num_epochs):
 
         train_losses.append(train_loss.item())
         optimizer.zero_grad()
-        train_loss.backward()
+        train_loss.backward(retain_graph=True)
         optimizer.step()
 
         # loss print
-        if (len(train_losses)) % 20 == 0:
+        if (len(train_losses)) % 100 == 0:
             mean_train_loss = mean(train_losses)
             wandb.log({"train_loss": mean_train_loss})
     train_losses.clear()
@@ -87,8 +87,6 @@ for epoch in range(num_epochs):
         print(f"Epoch {epoch+1}/{num_epochs} - Validation")
     for batch in val_dl:
         model_input, ground_truth = batch
-        model_input = model_input.to(device)
-        ground_truth = ground_truth.to(device)
         outputs = model(model_input)
         model_input = model_input.to(device)
         ground_truth = ground_truth.to(device)
