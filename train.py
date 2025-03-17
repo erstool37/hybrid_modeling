@@ -99,7 +99,7 @@ for epoch in range(num_epochs):
     scheduler.step()
     current_lr = scheduler.get_last_lr()[0]
 
-    print(f"Epoch {epoch+1}/{num_epochs} results - Train Loss: {mean_train_loss:.4f} Validation Loss: {mean_val_loss:.4f} - LR: {current_lr:.5f}")
+    print(f"Epoch {epoch+1}/{num_epochs} results - Train Loss: {mean_train_loss:.4f} Validation Loss: {mean_val_loss:.4f} - LR: {current_lr:.8f}")
 wandb.finish()
 
 torch.save(model.state_dict(), CHECKPOINT)

@@ -111,5 +111,6 @@ class PINN_Loss(nn.Module):
         self._compute_adaptive_constant(loss_res, loss_ode, self.model)
 
         total_loss = (loss_res + self.adaptive_constant_ode * loss_ode)
+        wandb.log({"loss ratio": loss_res/loss_ode})
 
         return total_loss
