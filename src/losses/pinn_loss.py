@@ -43,30 +43,30 @@ class PINN_Loss(nn.Module):
         return mass, rhs
     
     def _compute_adaptive_constant(self, loss_res, loss_bcs, model):
-        max_grad_res_list = []
-        mean_grad_ode_list = []
+        if model.training:
+            max_grad_res_list = []
+            mean_grad_ode_list = []
 
-        grad_res = torch.autograd.grad(outputs=loss_res, inputs=model.parameters(), retain_graph=True, create_graph=True)
-        grad_ode = torch.autograd.grad(outputs=loss_bcs, inputs=model.parameters(), retain_graph=True, create_graph=True)
+            grad_res = torch.autograd.grad(outputs=loss_res, inputs=model.parameters(), retain_graph=True, create_graph=True)
+            grad_ode = torch.autograd.grad(outputs=loss_bcs, inputs=model.parameters(), retain_graph=True, create_graph=True)
 
-        print(len(grad_res))
-        print(len(grad_ode))
+            for res_grad, ode_grad in zip(grad_res, grad_ode):
+                max_grad_res_list.append(torch.max(torch.abs(res_grad))) # max for each layer
+                mean_grad_ode_list.append(torch.mean(torch.abs(ode_grad))) # mean for each layer
 
-        for res_grad, ode_grad in zip(grad_res, grad_ode):
-            max_grad_res_list.append(torch.max(torch.abs(res_grad))) # max for each layer
-            mean_grad_ode_list.append(torch.mean(torch.abs(ode_grad))) # mean for each layer
+            # in case of no gradients
+            max_grad_res = torch.max(torch.stack(max_grad_res_list)) if len(max_grad_res_list) > 0 else torch.tensor(0.0, device=loss_res.device) # max for all layers
+            mean_grad_ode = torch.mean(torch.stack(mean_grad_ode_list)) if len(mean_grad_ode_list) > 0 else torch.tensor(1.0, device=loss_res.device) # mean for all layers
 
-        # in case of no gradients
-        max_grad_res = torch.max(torch.stack(max_grad_res_list)) if len(max_grad_res_list) > 0 else torch.tensor(0.0, device=loss_res.device) # max for all layers
-        mean_grad_ode = torch.mean(torch.stack(mean_grad_ode_list)) if len(mean_grad_ode_list) > 0 else torch.tensor(1.0, device=loss_res.device) # mean for all layers
+            # in case of dividion by zero
+            adaptive_constant_ode = max_grad_res / mean_grad_ode if mean_grad_ode > 0 else torch.tensor(1.0)
+            adaptive_constant_ode = adaptive_constant_ode.detach()
 
-        # in case of dividion by zero
-        adaptive_constant_ode = max_grad_res / mean_grad_ode if mean_grad_ode > 0 else torch.tensor(1.0)
-        adaptive_constant_ode = adaptive_constant_ode.detach()
-
-        self.adaptive_constant_ode = (1 - self.rate) * self.adaptive_constant_ode + self.rate * adaptive_constant_ode
-        self.adaptive_constant_bcs_log.append(self.adaptive_constant_ode.item())
-        wandb.log({"adaptive_constant_ode": self.adaptive_constant_ode.item()})
+            self.adaptive_constant_ode = (1 - self.rate) * self.adaptive_constant_ode + self.rate * adaptive_constant_ode
+            self.adaptive_constant_bcs_log.append(self.adaptive_constant_ode.item())
+            wandb.log({"adaptive_constant_ode": self.adaptive_constant_ode.item()})
+        else:
+            pass
 
     def forward(self, model_input, model_output, ground_truth, time_step):
 
@@ -108,7 +108,7 @@ class PINN_Loss(nn.Module):
         loss_ode = F.mse_loss(loss_ode, target=torch.zeros_like(rhs))
         loss_res = F.mse_loss(input=model_output[:, :2], target=ground_truth[:, :2])
         
-        self._compute_adaptive_constant(loss_ode, loss_res, self.model)
+        self._compute_adaptive_constant(loss_res, loss_ode, self.model)
 
         total_loss = (loss_res + self.adaptive_constant_ode * loss_ode)
 
