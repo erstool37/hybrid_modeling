@@ -7,6 +7,7 @@ from torch.utils.data import Subset, DataLoader
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from src.losses.prop_ref import Refrigerant as R
 
 PARA_DIR = "dataset/dataset.csv"
 STATS_DIR = "dataset/statistics_val.csv"
@@ -42,6 +43,7 @@ p_true = []
 
 h_pred = []
 h_true = []
+h_sat = []
 
 for batch in val_dl:
     model_input, ground_truth = batch
@@ -50,6 +52,7 @@ for batch in val_dl:
 
     outputs = outputs.detach().cpu().numpy()
     ground_truth = ground_truth.detach().cpu().numpy()
+    h_sat = R.vap_hsat(p_pred)
     
     print("pred", unnormalize(outputs[:,0],"pressure"))
     print("true", unnormalize(ground_truth[:,0],"pressure"))
@@ -62,6 +65,7 @@ for batch in val_dl:
 
     h_pred.append(unnormalize(outputs[:,1],"h_ref_out"))
     h_true.append(unnormalize(ground_truth[:,1],"h_ref_out"))
+    h_sat.append(unnormalize(h_sat))
 
 # Plot predicted vs true pressure
 plt.figure(figsize=(10, 5))
@@ -77,6 +81,7 @@ plt.savefig('predict_p.png', dpi=300, bbox_inches='tight')
 plt.figure(figsize=(10, 5))
 plt.plot(h_pred, label="Predicted h_ref_out", linestyle='--')
 plt.plot(h_true, label="True h_ref_out", linestyle='-')
+plt.plot(h_sat, label="Saturation h_ref_out", linestyle='---')
 plt.title("Predicted vs True h_ref_out")
 plt.xlabel("Sample Index")
 plt.ylabel("Normalized h_ref_out")
