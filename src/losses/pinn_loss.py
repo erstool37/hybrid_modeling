@@ -17,8 +17,14 @@ class PINN_Loss(nn.Module):
         self.adaptive_constant_res_log = []
         self.adaptive_constant_bcs_log = []
         self.model = model
+    
+    def normalize(self, item, column):
+        stats = pd.read_csv("dataset/statistics.csv")
+        item_norm = (item - torch.tensor(stats.loc[0, column]))/torch.tensor(stats.loc[1, column])
 
-    def _unnormalize(self, item, column):
+        return item_norm
+
+    def unnormalize(self, item, column):
         stats = pd.read_csv("dataset/statistics.csv")
         item_un = torch.tensor(stats.loc[1, column]) * item + torch.tensor(stats.loc[0, column])
 
@@ -77,19 +83,19 @@ class PINN_Loss(nn.Module):
         zeta, gamma, eps_tp, eps_sh = model_output[:, 2:].T.unsqueeze(-1) # Predicted present time step hidden parameters
 
         # ODE based loss calculation
-        p_input_un = self._unnormalize(p_input, "pressure")
-        h_ref_out_input_un = self._unnormalize(h_ref_out_input, "h_ref_out")
-        m_ref_in_un = self._unnormalize(m_ref_in, "m_ref_in")
-        m_ref_out_un = self._unnormalize(m_ref_out, "m_ref_out")
-        h_ref_in_un = self._unnormalize(h_ref_in, "h_ref_in")
-        m_cool_un = self._unnormalize(m_cool, "m_cool")
-        T_cool_in_un = self._unnormalize(T_cool_in, "T_cool_in")
-        zeta_un = self._unnormalize(zeta, "z_tpsh")
-        gamma_un = self._unnormalize(gamma, "gamma")
-        eps_tp_un = self._unnormalize(eps_tp, "eps_tp")
-        eps_sh_un = self._unnormalize(eps_sh, "eps_sh")
-        p_pred_un = self._unnormalize(p_pred, "pressure")
-        h_ref_out_pred_un = self._unnormalize(h_ref_out_pred, "h_ref_out") # (batch_size, 1)
+        p_input_un = self.unnormalize(p_input, "pressure")
+        h_ref_out_input_un = self.unnormalize(h_ref_out_input, "h_ref_out")
+        m_ref_in_un = self.unnormalize(m_ref_in, "m_ref_in")
+        m_ref_out_un = self.unnormalize(m_ref_out, "m_ref_out")
+        h_ref_in_un = self.unnormalize(h_ref_in, "h_ref_in")
+        m_cool_un = self.unnormalize(m_cool, "m_cool")
+        T_cool_in_un = self.unnormalize(T_cool_in, "T_cool_in")
+        zeta_un = self.unnormalize(zeta, "z_tpsh")
+        gamma_un = self.unnormalize(gamma, "gamma")
+        eps_tp_un = self.unnormalize(eps_tp, "eps_tp")
+        eps_sh_un = self.unnormalize(eps_sh, "eps_sh")
+        p_pred_un = self.unnormalize(p_pred, "pressure")
+        h_ref_out_pred_un = self.unnormalize(h_ref_out_pred, "h_ref_out") # (batch_size, 1)
             
         x = torch.cat((p_pred_un, h_ref_out_pred_un), dim=-1)
         u = torch.cat((m_ref_in_un, m_ref_out_un, h_ref_in_un, m_cool_un, T_cool_in_un), dim=-1)
