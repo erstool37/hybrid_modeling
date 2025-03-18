@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from src.losses.prop_ref import Refrigerant as R
+from scipy.io import loadmat
 
 PARA_DIR = "dataset/dataset.csv"
 STATS_DIR = "dataset/statistics_val.csv"
@@ -20,9 +21,16 @@ SIZE = 0.05
 
 def unnormalize(item, column):
     stats = pd.read_csv(STATS_DIR)
-    item_norm = (item * stats.loc[1, column]) + stats.loc[0, column]
+    item_norm = (item) * (stats.loc[1, column]) + (stats.loc[0, column])
 
     return item_norm
+
+def h_satu(x):
+    x = (x - 1300.9) / 939.1761
+    y = np.array([x**8, x**7, x**6, x**5, x**4, x**3, x**2, x, 1.0])
+    coeff = np.array([-0.870502063247313, 0.735216547740597, 3.35155930854622, -2.33678206224002, -5.32622216975478, 3.24797824375616, -4.21395627140569, 7.79742106651108, 396.065396306915])
+
+    return np.dot(y,coeff)
 
 # load validation set(normalized)
 val_ds = Paraloader(dir = PARA_DIR, stats_dir=STATS_DIR, sequence_length = SEQ_LEN)
@@ -38,12 +46,13 @@ model.load_state_dict(torch.load("src/models/PINN0318_01.pth"))
 model.eval()
 model.cuda()
 
-p_pred = []
-p_true = []
+p_pred_list = []
+p_true_list = []
 
-h_pred = []
-h_true = []
-h_sat = []
+h_pred_list = []
+h_true_list = []
+h_sat_list = []
+
 
 for batch in val_dl:
     model_input, ground_truth = batch
@@ -52,25 +61,23 @@ for batch in val_dl:
 
     outputs = outputs.detach().cpu().numpy()
     ground_truth = ground_truth.detach().cpu().numpy()
-    h_sat = R.vap_hsat(p_pred)
     
-    print("pred", unnormalize(outputs[:,0],"pressure"))
-    print("true", unnormalize(ground_truth[:,0],"pressure"))
+    p_pred = unnormalize(outputs[:,0],"pressure")
+    p_true = unnormalize(ground_truth[:,0],"pressure")
+    h_pred = unnormalize(outputs[:,1],"h_ref_out")
+    h_true = unnormalize(ground_truth[:,1],"h_ref_out")
+    h_sat = h_satu(p_pred.item())
 
-    print("h_pred", unnormalize(outputs[:,1],"h_ref_out"))
-    print("h_true", unnormalize(ground_truth[:,1],"h_ref_out"))
-    
-    p_pred.append(unnormalize(outputs[:,0],"pressure"))
-    p_true.append(unnormalize(ground_truth[:,0],"pressure"))
-
-    h_pred.append(unnormalize(outputs[:,1],"h_ref_out"))
-    h_true.append(unnormalize(ground_truth[:,1],"h_ref_out"))
-    h_sat.append(unnormalize(h_sat))
+    p_pred_list.append(p_pred.item())
+    p_true_list.append(p_true.item())
+    h_pred_list.append(h_pred)
+    h_true_list.append(h_true)
+    h_sat_list.append(h_sat)
 
 # Plot predicted vs true pressure
 plt.figure(figsize=(10, 5))
-plt.plot(p_pred, label="Predicted Pressure", linestyle='--')
-plt.plot(p_true, label="True Pressure", linestyle='-')
+plt.plot(p_pred_list, label="Predicted Pressure", linestyle='--')
+plt.plot(p_true_list, label="True Pressure", linestyle='-')
 plt.title("Predicted vs True Pressure")
 plt.xlabel("Sample Index")
 plt.ylabel("Normalized Pressure")
@@ -79,9 +86,9 @@ plt.grid()
 plt.savefig('predict_p.png', dpi=300, bbox_inches='tight')
 
 plt.figure(figsize=(10, 5))
-plt.plot(h_pred, label="Predicted h_ref_out", linestyle='--')
-plt.plot(h_true, label="True h_ref_out", linestyle='-')
-plt.plot(h_sat, label="Saturation h_ref_out", linestyle='---')
+plt.plot(h_pred_list, label="Predicted h_ref_out", linestyle='--')
+plt.plot(h_true_list, label="True h_ref_out", linestyle='-')
+plt.plot(h_sat_list , label="Saturation h_ref_out", linestyle='-.')
 plt.title("Predicted vs True h_ref_out")
 plt.xlabel("Sample Index")
 plt.ylabel("Normalized h_ref_out")
