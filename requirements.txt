@@ -1,4 +1,4 @@
-# vessl storage copy-file optimized volume://vessl-storage/hybrid-modeling 
+# vessl storage copy-file MP4+PARAMETERDIRECTORY volume://vessl-storage/lbmvideo
 
 annotated-types==0.7.0
 certifi==2025.1.31

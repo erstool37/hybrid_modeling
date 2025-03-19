@@ -8,8 +8,8 @@ import pandas
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Subset, DataLoader
 from statistics import mean
-from src.models.pinn import PINN
-from src.losses.pinn_loss import PINN_Loss
+from src.models.hybridModel import HybridModel, PINN, LSTM
+from src.losses.hybrid_loss import HybridLoss
 from src.utils.paraloader import Paraloader
 
 with open("config.yaml", "r") as file:
@@ -47,9 +47,11 @@ train_dl = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=False, num_worker
 val_dl = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
 
 # Initialize model, loss, scheduler, and optimizer
-model = PINN(input_size=7, hidden_dim=HIDDEN_DIM, num_layers=NUM_LAYERS, output_size=6)
-criterion = PINN_Loss(rate=RATE, model = model)
+lstm = LSTM(input_size=7, hidden_dim=HIDDEN_DIM, num_layers=NUM_LAYERS, output_size_lstm=4)
+pinn = PINN(input_size=7, hidden_dim=HIDDEN_DIM, num_layers=NUM_LAYERS, output_size_pinn=2)
+model = HybridModel(lstm, pinn)
 
+criterion = HybridLoss(rate=RATE, lstm=lstm, pinn=pinn, model=model)
 optimizer = optim.Adam(model.parameters(), lr=LR_RATE)
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=NUM_EPOCHS, eta_min=ETA_MIN)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -68,8 +70,8 @@ for epoch in range(num_epochs):
         model_input, ground_truth = batch
         model_input = model_input.to(device)
         ground_truth = ground_truth.to(device)
-        outputs = model(model_input)
-        train_loss = criterion(model_input, outputs, ground_truth, time_step=2) # 2 second interval data
+        lstm_output, pinn_output = model(model_input)
+        train_loss = criterion(model_input, lstm_output, pinn_output, ground_truth, time_step=2) # 2 second interval data
 
         train_losses.append(train_loss.item())
         optimizer.zero_grad()
@@ -90,8 +92,9 @@ for epoch in range(num_epochs):
         model_input, ground_truth = batch
         model_input = model_input.to(device)
         ground_truth = ground_truth.to(device)
-        outputs = model(model_input)
-        val_loss = criterion(model_input, outputs, ground_truth, time_step=2)
+
+        lstm_output, pinn_output = model(model_input)
+        val_loss = criterion(model_input, lstm_output, pinn_output, ground_truth, time_step=2)
         val_losses.append(val_loss.item())
 
     mean_val_loss = mean(val_losses)

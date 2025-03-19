@@ -11,7 +11,7 @@ from scipy.io import loadmat
 
 PARA_DIR = "dataset/dataset.csv"
 STATS_DIR = "dataset/statistics_val.csv"
-CHECKPOINT = "src/models/PINN0319_02.pth"
+CHECKPOINT = "src/models/HYBRID0319_01.pth"
 
 SEQ_LEN=30
 BATCH_SIZE = 1
@@ -19,7 +19,6 @@ NUM_WORKERS = 1
 HIDDEN_DIM = 128
 NUM_LAYERS = 12
 SIZE = 0.05
-
 
 def unnormalize(item, column):
     stats = pd.read_csv(STATS_DIR)
@@ -40,7 +39,10 @@ val_ds = Subset(val_ds, val_idx)
 val_dl = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
 
 # load model
-model = PINN(input_size=7, hidden_dim=HIDDEN_DIM, num_layers=NUM_LAYERS, output_size=6)
+lstm = LSTM(input_size=7, hidden_dim=HIDDEN_DIM, num_layers=NUM_LAYERS, output_size_lstm=4)
+pinn = PINN(input_size=7, hidden_dim=HIDDEN_DIM, num_layers=NUM_LAYERS, output_size_pinn=2)
+model = HybridModel(lstm, pinn)
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model.load_state_dict(torch.load(CHECKPOINT))
 model.eval()
@@ -57,9 +59,10 @@ zeta_true_list = []
 for batch in val_dl:
     model_input, ground_truth = batch
     model_input = model_input.to(device)
-    outputs = model(model_input)
+    lstm_outputs, pinn_outputs = model(model_input)
 
-    outputs = outputs.detach().cpu().numpy()
+    lstm_outputs = lstm_outputs.detach().cpu().numpy()
+    pinn_outputs = pinn_outputs.detach().cpu().numpy()
     ground_truth = ground_truth.detach().cpu().numpy()
     
     p_pred = unnormalize(outputs[:,0],"pressure")
