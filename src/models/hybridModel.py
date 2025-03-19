@@ -35,7 +35,7 @@ class HybridModel(nn.Module):
         self.pinn_model = pinn_model
     
     def forward(self, x):
-        lstm_output = self.lstm_model(x)  # Sequential prediction
-        pinn_output = self.pinn_model(x)  # Apply physical constraints on LSTM output
+        lstm_output = self.lstm_model(x)
+        pinn_output = self.pinn_model(x) 
         return lstm_output, pinn_output
 

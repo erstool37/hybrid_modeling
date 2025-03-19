@@ -63,7 +63,7 @@ class Evaporator(object):
         self.height = 0.005
         self.length = 0.5
         self.tubenum = 10
-        self.V_flow = self.width * self.height * self.length * self.tubenum
+        self.V_flow = torch.tensor(self.width * self.height * self.length * self.tubenum)
         
         self.A_inner = 2 * (self.width + self.height) * self.length * self.tubenum
         self.A_outer = self.A_inner
@@ -140,15 +140,14 @@ class Evaporator(object):
         mass01 = dzdt_const
         mass10 = (1-z_tpsh) * ((h_ref_out-hg)*(dDdp_sh + dDdh_sh*dhg_dp/2) + D_ref_sh*dhg_dp/2 - 1)
         mass11 = (1-z_tpsh) * ((h_ref_out-hg)*dDdh_sh + D_ref_sh) / 2
-
         rhs0 = m_ref_in * (h_ref_in - hg) + Q_tp
         rhs1 = m_ref_out * (hg - h_ref_out) + Q_sh    
         mass = torch.stack([torch.cat([mass00, mass01], dim=-1), torch.cat([mass10, mass11], dim=-1)], dim=1)
         rhs = torch.cat([rhs0, rhs1], dim=-1)  # shape: (batch, 2)
-
         # xdot0 = (mass11 * rhs0 - mass01 * rhs1) / (mass00 * mass11 - mass01 * mass10)
         # xdot1 = (mass00 * rhs1 - mass10 * rhs0) / (mass00 * mass11 - mass01 * mass10)
         # xdot = torch.stack([xdot0, xdot1], dim=-1) / self.V_flow
+        mass = mass * self.V_flow.to(mass.device) / self.scale_grad.to(mass.device)
 
         return mass, rhs
     
@@ -356,7 +355,7 @@ class Evaporator(object):
         up_ca = ca.vcat([u_ca, p_ca])
         
         xdot = self._system_dynamics(x_d, u_d, p_d) # next time step (dP/dt, dH/dt)
-        xdot = np.multiply(xdot, self.scale_grad) #Interpolation
+        xdot = np.multiply(xdot, self.scale_grad)
         
         ode = {"x": x_ca, "p": up_ca, "ode": xdot}
         

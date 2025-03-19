@@ -7,6 +7,7 @@ from .prop_cool_evap import Coolant_Evaporator
 from torch.nn import functional as F
 import pandas as pd
 import wandb
+from .utility import zero_one_scale, zero_one_descale
 
 class PINN_Loss(nn.Module):
     def __init__(self, rate, model):
@@ -19,6 +20,9 @@ class PINN_Loss(nn.Module):
         self.adaptive_constant_ode_log = []
         self.adaptive_constant_theta_log = []
         self.model = model
+
+        self.x_min = torch.tensor([100., 270.], dtype=torch.float32)
+        self.x_max = torch.tensor([360., 380.], dtype=torch.float32)
     
     def normalize(self, item, column):
         stats = pd.read_csv("dataset/statistics.csv")
@@ -92,7 +96,7 @@ class PINN_Loss(nn.Module):
         m_ref_in, m_ref_out, h_ref_in, m_cool, T_cool_in = model_input[:, -1, 2:].T.unsqueeze(-1) # Present time step input variables
         # p_true, h_ref_out_true = ground_truth[:, :2].T.unsqueeze(-1) # True next time step state variables
         p_pred, h_ref_out_pred = model_output[:, :2].T.unsqueeze(-1) # Predicted next time step state variables
-        zeta, gamma, eps_tp, eps_sh = model_output[:, 2:].T.unsqueeze(-1) # True present time step hidden parameters
+        zeta, gamma, eps_tp, eps_sh = ground_truth[:, 2:].T.unsqueeze(-1) # True present time step hidden parameters
 
         # ODE based loss calculation
         p_input_un = self.unnormalize(p_input, "pressure")
@@ -109,7 +113,7 @@ class PINN_Loss(nn.Module):
         p_pred_un = self.unnormalize(p_pred, "pressure")
         h_ref_out_pred_un = self.unnormalize(h_ref_out_pred, "h_ref_out") # (batch_size, 1)
             
-        x = torch.cat((p_pred_un, h_ref_out_pred_un), dim=-1)
+        x = torch.cat((p_input_un, h_ref_out_input_un), dim=-1)
         u = torch.cat((m_ref_in_un, m_ref_out_un, h_ref_in_un, m_cool_un, T_cool_in_un), dim=-1)
         p = torch.cat((zeta_un, gamma_un, eps_tp_un, eps_sh_un), dim=-1)
 
@@ -120,18 +124,22 @@ class PINN_Loss(nn.Module):
         dp_dt_mod = (p_pred_un - p_input_un) / time_step # (batch_size, 1)
         dh_dt_mod = (h_ref_out_pred_un - h_ref_out_input_un) / time_step # (batch_size, 1)
         dx_dt_mod = torch.cat((dp_dt_mod, dh_dt_mod), dim=-1).unsqueeze(-1) # (batch_size, 2, 1)
+        dx_dt_mod = zero_one_scale(dx_dt_mod, self.x_min, self.x_max) # scaling match
+        loss_ode = torch.bmm(mass, dx_dt_mod) - rhs
 
         # loss calculation
-        loss_ode = torch.bmm(mass, dx_dt_mod) - rhs
-        loss_ode = F.mse_loss(loss_ode, target=torch.zeros_like(rhs))
         loss_res = F.mse_loss(input=model_output[:, :2], target=ground_truth[:, :2])
         loss_theta = F.mse_loss(input=model_output[:, 2], target=ground_truth[:, 2])
+        loss_ode = F.mse_loss(input=loss_ode, target=torch.zeros_like(rhs))
         
-        self._compute_adaptive_constant(loss_res, loss_ode, loss_theta, self.model)
+        # self._compute_adaptive_constant(loss_res, loss_ode, loss_theta, self.model)
 
-        total_loss = loss_res +  self.adaptive_constant_theta * loss_theta + self.adaptive_constant_ode * loss_ode
+        total_loss = loss_res + loss_theta + loss_ode
+
         wandb.log({"loss_res_x_chunk": loss_res})
-        wandb.log({"loss_res_theta_chunk": self.adaptive_constant_theta * loss_theta})
-        wandb.log({"loss_res_ode_chunk": self.adaptive_constant_ode * loss_ode})
-
+        wandb.log({"loss_res_ode": loss_ode})
+        wandb.log({"loss_res_theta":loss_theta})
+        # wandb.log({"loss_res_theta_chunk": self.adaptive_constant_theta * loss_theta})
+        # wandb.log({"loss_res_ode_chunk": self.adaptive_constant_ode * loss_ode})
+    
         return total_loss

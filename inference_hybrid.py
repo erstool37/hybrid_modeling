@@ -1,6 +1,5 @@
 import torch
-from src.models.pinn import PINN
-from src.losses.pinn_loss import PINN_Loss as L
+from src.models.hybridModel import LSTM, PINN, HybridModel
 from src.utils.paraloader import Paraloader
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Subset, DataLoader
@@ -11,13 +10,13 @@ from scipy.io import loadmat
 
 PARA_DIR = "dataset/dataset.csv"
 STATS_DIR = "dataset/statistics_val.csv"
-CHECKPOINT = "src/models/HYBRID0319_01.pth"
+CHECKPOINT = "src/models/weights_hybrid/HYBRID0319_01.pth"
 
 SEQ_LEN=30
 BATCH_SIZE = 1
 NUM_WORKERS = 1
 HIDDEN_DIM = 128
-NUM_LAYERS = 12
+NUM_LAYERS = 16
 SIZE = 0.05
 
 def unnormalize(item, column):
@@ -65,9 +64,9 @@ for batch in val_dl:
     pinn_outputs = pinn_outputs.detach().cpu().numpy()
     ground_truth = ground_truth.detach().cpu().numpy()
     
-    p_pred = unnormalize(outputs[:,0],"pressure")
-    h_pred = unnormalize(outputs[:,1],"h_ref_out")
-    zeta_pred = unnormalize(outputs[:,2], "z_tpsh")
+    p_pred = unnormalize(pinn_outputs[:,0],"pressure")
+    h_pred = unnormalize(pinn_outputs[:,1],"h_ref_out")
+    zeta_pred = unnormalize(lstm_outputs[:,2], "z_tpsh")
 
     h_sat = h_satu(p_pred.item())
     p_true = unnormalize(ground_truth[:,0],"pressure")
@@ -91,7 +90,7 @@ plt.xlabel("Sample Index")
 plt.ylabel("Normalized Pressure")
 plt.legend()
 plt.grid()
-plt.savefig('predict_p.png', dpi=300, bbox_inches='tight')
+plt.savefig('Hpredict_p.png', dpi=300, bbox_inches='tight')
 
 plt.figure(figsize=(10, 5))
 plt.plot(h_pred_list, label="Predicted h_ref_out", linestyle='--')
@@ -102,7 +101,7 @@ plt.xlabel("Sample Index")
 plt.ylabel("Normalized h_ref_out")
 plt.legend()
 plt.grid()
-plt.savefig('predict_h.png', dpi=300, bbox_inches='tight')
+plt.savefig('Hpredict_h_.png', dpi=300, bbox_inches='tight')
 
 plt.figure(figsize=(10, 5))
 plt.plot(zeta_pred_list, label="Predicted zeta", linestyle='--')
@@ -112,6 +111,6 @@ plt.xlabel("Sample Index")
 plt.ylabel("Normalized zeta")
 plt.legend()
 plt.grid()
-plt.savefig('predict_z.png', dpi=300, bbox_inches='tight')
+plt.savefig('Hpredict_z.png', dpi=300, bbox_inches='tight')
 
 plt.close()

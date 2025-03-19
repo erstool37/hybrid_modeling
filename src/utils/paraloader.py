@@ -28,8 +28,8 @@ class Paraloader(Dataset):
         # Slice tensors directly
         step_state = self.states[idx : idx + self.sequence_length] # current time step state
         step_input = self.inputs[idx : idx + self.sequence_length] # current time step input
-        step_theta = self.thetas[idx + self.sequence_length] # current time step theta
-        pred_state = self.states[idx + 1 + self.sequence_length] # next time step state
+        step_theta = self.thetas[idx + self.sequence_length - 1] # current time step theta
+        pred_state = self.states[idx + self.sequence_length] # next time step state
 
         # Flatten tensors and concatenate them
         model_input = torch.cat((step_state, step_input), dim=1)
@@ -38,4 +38,4 @@ class Paraloader(Dataset):
         return model_input, ground_truth
     
     def __len__(self):
-        return len(self.states) - self.sequence_length - 1
+        return len(self.states) - self.sequence_length

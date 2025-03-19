@@ -109,7 +109,7 @@ class HybridLoss(nn.Module):
         p_pred_un = self.unnormalize(p_pred, "pressure")
         h_ref_out_pred_un = self.unnormalize(h_ref_out_pred, "h_ref_out") # (batch_size, 1)
             
-        x = torch.cat((p_pred_un, h_ref_out_pred_un), dim=-1)
+        x = torch.cat((p_input_un, h_ref_out_input_un), dim=-1)
         u = torch.cat((m_ref_in_un, m_ref_out_un, h_ref_in_un, m_cool_un, T_cool_in_un), dim=-1)
         p = torch.cat((zeta_un, gamma_un, eps_tp_un, eps_sh_un), dim=-1)
 
@@ -120,6 +120,7 @@ class HybridLoss(nn.Module):
         dp_dt_mod = (p_pred_un - p_input_un) / time_step # (batch_size, 1)
         dh_dt_mod = (h_ref_out_pred_un - h_ref_out_input_un) / time_step # (batch_size, 1)
         dx_dt_mod = torch.cat((dp_dt_mod, dh_dt_mod), dim=-1).unsqueeze(-1) # (batch_size, 2, 1)
+        dx_dt_mod = zero_one_scale(dx_dt_mod, self.x_min, self.x_max) # scaling match
         loss_ode = torch.bmm(mass, dx_dt_mod) - rhs
 
         # loss calculation
@@ -127,9 +128,9 @@ class HybridLoss(nn.Module):
         loss_res = F.mse_loss(input=pinn_output, target=ground_truth[:, :2]) # x loss
         loss_theta = F.mse_loss(input=lstm_output, target=ground_truth[:,2:])  # theta loss
         
-        self._compute_adaptive_constant(loss_res, loss_ode, loss_theta, self.lstm_model, self.pinn_model)
+        # self._compute_adaptive_constant(loss_res, loss_ode, loss_theta, self.lstm_model, self.pinn_model)
 
-        total_loss = loss_res + loss_theta + 0.00001 * loss_ode
+        total_loss = loss_res
         # total_loss = loss_res +  self.adaptive_constant_theta * loss_theta + self.adaptive_constant_ode * loss_ode
 
         # wandb.log({"loss_res_x_chunk": loss_res})
@@ -137,7 +138,7 @@ class HybridLoss(nn.Module):
         # wandb.log({"loss_res_ode_chunk": self.adaptive_constant_ode * loss_ode})
 
         wandb.log({"loss_res_x": loss_res})
-        wandb.log({"loss_res_theta": loss_theta})
-        wandb.log({"loss_res_ode": 0.00001 * loss_ode})
+        # wandb.log({"loss_res_theta": loss_theta})
+        wandb.log({"loss_res_ode": loss_ode})
 
         return total_loss

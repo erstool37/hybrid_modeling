@@ -2,6 +2,9 @@ from pathlib import Path
 
 # scale X -> [0,1]
 def zero_one_scale(var, var_min, var_max):
+    var_min = var_min.unsqueeze(-1).expand(var.shape).to(var.device)
+    var_max = var_max.unsqueeze(-1).expand(var.shape).to(var.device)
+
     scaled_var = (var - var_min) / (var_max - var_min)
     return scaled_var
 

@@ -57,7 +57,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # Training loop
 num_epochs = NUM_EPOCHS
 
-wandb.watch(model, criterion, log="all", log_freq=5)
+# wandb.watch(model, criterion, log="all", log_freq=5)
 model.to(device)
 
 for epoch in range(num_epochs):
