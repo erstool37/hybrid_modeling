@@ -147,7 +147,7 @@ class Evaporator(object):
         # xdot0 = (mass11 * rhs0 - mass01 * rhs1) / (mass00 * mass11 - mass01 * mass10)
         # xdot1 = (mass00 * rhs1 - mass10 * rhs0) / (mass00 * mass11 - mass01 * mass10)
         # xdot = torch.stack([xdot0, xdot1], dim=-1) / self.V_flow
-        mass = mass * self.V_flow.to(mass.device) / self.scale_grad.to(mass.device)
+        mass = mass * self.V_flow.to(mass.device)
 
         return mass, rhs
     

@@ -23,6 +23,7 @@ class PINN_Loss(nn.Module):
 
         self.x_min = torch.tensor([100., 270.], dtype=torch.float32)
         self.x_max = torch.tensor([360., 380.], dtype=torch.float32)
+        self.scale_grad = 1. / (self.x_max - self.x_min)
     
     def normalize(self, item, column):
         stats = pd.read_csv("dataset/statistics.csv")
@@ -124,7 +125,8 @@ class PINN_Loss(nn.Module):
         dp_dt_mod = (p_pred_un - p_input_un) / time_step # (batch_size, 1)
         dh_dt_mod = (h_ref_out_pred_un - h_ref_out_input_un) / time_step # (batch_size, 1)
         dx_dt_mod = torch.cat((dp_dt_mod, dh_dt_mod), dim=-1).unsqueeze(-1) # (batch_size, 2, 1)
-        dx_dt_mod = zero_one_scale(dx_dt_mod, self.x_min, self.x_max) # scaling match
+        dx_dt_mod = zero_one_scale(dx_dt_mod, self.x_min, self.x_max) / self.scale_grad.to(dx_dt_mod.device)# scaling match
+    
         loss_ode = torch.bmm(mass, dx_dt_mod) - rhs
 
         # loss calculation
