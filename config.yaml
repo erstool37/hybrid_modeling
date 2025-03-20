@@ -2,7 +2,7 @@ settings:
   batch_size : 1024
   num_workers : 2
   num_epochs : 100
-  lr_rate : 1e-4
+  lr_rate : 1e-2
   hidden_dim : 128
   num_layers : 16 # 32 originally
   rate : 0.9

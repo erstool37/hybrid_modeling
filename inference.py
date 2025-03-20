@@ -11,7 +11,7 @@ from scipy.io import loadmat
 
 PARA_DIR = "dataset/dataset.csv"
 STATS_DIR = "dataset/statistics_val.csv"
-CHECKPOINT = "src/models/weights_pinn/PINN0320_01.pth"
+CHECKPOINT = "src/models/weights_pinn/PINN0320_02.pth"
 
 SEQ_LEN=30
 BATCH_SIZE = 1
@@ -19,7 +19,6 @@ NUM_WORKERS = 1
 HIDDEN_DIM = 128
 NUM_LAYERS = 16
 SIZE = 0.05
-
 
 def unnormalize(item, column):
     stats = pd.read_csv(STATS_DIR)

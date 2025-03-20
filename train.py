@@ -57,7 +57,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # Training loop
 num_epochs = NUM_EPOCHS
 
-# wandb.watch(model, criterion, log="all", log_freq=5)
+wandb.watch(model, criterion, log="all", log_freq=5)
 model.to(device)
 
 for epoch in range(num_epochs):
@@ -75,6 +75,9 @@ for epoch in range(num_epochs):
         optimizer.zero_grad()
         train_loss.backward(retain_graph=True)
         optimizer.step()
+
+        # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0) # for gradient exploding
+        # torch.nn.utils.clip_grad_value_(model.parameters(), clip_value=0.5) # for gradient vanishing
 
         # loss print
         if (len(train_losses)) % 20 == 0:
