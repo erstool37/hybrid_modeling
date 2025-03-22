@@ -32,7 +32,7 @@ class Paraloader(Dataset):
         pred_state = self.states[idx + self.sequence_length] # next time step state
 
         # Flatten tensors and concatenate them
-        model_input = torch.cat((step_state, step_input), dim=1)
+        model_input = torch.cat((step_state, step_input, step_theta), dim=1)
         ground_truth = torch.cat((pred_state, step_theta), dim=0)
 
         return model_input, ground_truth

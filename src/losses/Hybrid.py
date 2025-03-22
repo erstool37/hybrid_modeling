@@ -1,12 +1,13 @@
 import torch
 import torch.nn as nn
-from .sys_evap_1008ver import Evaporator
 from scipy.io import loadmat
-from .prop_ref import Refrigerant 
-from .prop_cool_evap import Coolant_Evaporator
-from torch.nn import functional as F
 import pandas as pd
 import wandb
+from calculator.sys_evap_1008ver import Evaporator
+from calculator.prop_ref import Refrigerant 
+from calculator.prop_cool_evap import Coolant_Evaporator
+from calculator.utility import zero_one_scale, zero_one_descale
+from torch.nn import functional as F
 
 class HybridLoss(nn.Module):
     def __init__(self, rate, lstm, pinn, model):

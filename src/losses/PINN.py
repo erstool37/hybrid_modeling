@@ -9,9 +9,9 @@ from calculator.prop_ref import Refrigerant
 from calculator.prop_cool_evap import Coolant_Evaporator
 from calculator.utility import zero_one_scale, zero_one_descale
 
-class PINN_Loss(nn.Module):
+class PINNLoss(nn.Module):
     def __init__(self, rate, model):
-        super(PINN_Loss, self).__init__()
+        super(PINNLoss, self).__init__()
         self.rate = rate
         self.model = model
         self.x_min = torch.tensor([100., 270.], dtype=torch.float32)

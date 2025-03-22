@@ -8,8 +8,8 @@ import pandas
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Subset, DataLoader
 from statistics import mean
-from src.models.hybridModel import HybridModel, PINN, LSTM
-from src.losses.hybrid_loss import HybridLoss
+from src.models.HybridModel import HybridModel, PINN, LSTM
+from src.losses.Hybrid import HybridLoss
 from src.utils.paraloader import Paraloader
 
 with open("config.yaml", "r") as file:
@@ -66,7 +66,7 @@ for epoch in range(num_epochs):
     model.train()
     train_losses = []
     print(f"Epoch {epoch+1}/{num_epochs} - Training ")
-    for batch in train_dl: 
+    for batch in tqdm(train_dl): 
         model_input, ground_truth = batch
         model_input = model_input.to(device)
         ground_truth = ground_truth.to(device)

@@ -5,11 +5,12 @@ import wandb
 import yaml
 import numpy as np
 import pandas
+import tqdm
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Subset, DataLoader
 from statistics import mean
-from src.models.pinn import PINN
-from src.losses.pinn_loss import PINN_Loss
+from src.models.PINN import PINN
+from src.losses.PINN import PINNLoss
 from src.utils.paraloader import Paraloader
 
 with open("config.yaml", "r") as file:
@@ -48,7 +49,7 @@ val_dl = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=NU
 
 # Initialize model, loss, scheduler, and optimizer
 model = PINN(input_size=7, hidden_dim=HIDDEN_DIM, num_layers=NUM_LAYERS, output_size=6)
-criterion = PINN_Loss(rate=RATE, model = model)
+criterion = PINNLoss(rate=RATE, model = model)
 
 optimizer = optim.Adam(model.parameters(), lr=LR_RATE)
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=NUM_EPOCHS, eta_min=ETA_MIN)
@@ -64,7 +65,7 @@ for epoch in range(num_epochs):
     model.train()
     train_losses = []
     print(f"Epoch {epoch+1}/{num_epochs} - Training ")
-    for batch in train_dl: 
+    for batch in tqdm(train_dl): 
         model_input, ground_truth = batch
         model_input = model_input.to(device)
         ground_truth = ground_truth.to(device)
@@ -76,8 +77,7 @@ for epoch in range(num_epochs):
         train_loss.backward(retain_graph=True)
         optimizer.step()
 
-        # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0) # for gradient exploding
-        # torch.nn.utils.clip_grad_value_(model.parameters(), clip_value=0.5) # for gradient vanishing
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0) # for gradient explodin
 
         # loss print
         if (len(train_losses)) % 20 == 0:
@@ -89,7 +89,7 @@ for epoch in range(num_epochs):
     val_losses = []
     with torch.no_grad():
         print(f"Epoch {epoch+1}/{num_epochs} - Validation")
-    for batch in val_dl:
+    for batch in tqdm(val_dl):
         model_input, ground_truth = batch
         model_input = model_input.to(device)
         ground_truth = ground_truth.to(device)
