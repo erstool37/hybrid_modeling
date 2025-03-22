@@ -1,40 +1,37 @@
 import torch
 import torch.nn as nn
-from .sys_evap_1008ver import Evaporator
-from scipy.io import loadmat
-from .prop_ref import Refrigerant 
-from .prop_cool_evap import Coolant_Evaporator
 from torch.nn import functional as F
+from scipy.io import loadmat
 import pandas as pd
 import wandb
-from .utility import zero_one_scale, zero_one_descale
+from calculator.sys_evap_1008ver import Evaporator
+from calculator.prop_ref import Refrigerant 
+from calculator.prop_cool_evap import Coolant_Evaporator
+from calculator.utility import zero_one_scale, zero_one_descale
 
 class PINN_Loss(nn.Module):
     def __init__(self, rate, model):
         super(PINN_Loss, self).__init__()
         self.rate = rate
-        self.adaptive_constant_ode = torch.tensor(1.0, dtype=torch.float32, requires_grad=False)
-        self.adaptive_constant_theta = torch.tensor(1.0, dtype=torch.float32, requires_grad=False)
-
-        self.adaptive_constant_res_log = []
-        self.adaptive_constant_ode_log = []
-        self.adaptive_constant_theta_log = []
         self.model = model
-
         self.x_min = torch.tensor([100., 270.], dtype=torch.float32)
         self.x_max = torch.tensor([360., 380.], dtype=torch.float32)
         self.scale_grad = 1. / (self.x_max - self.x_min)
+        
+        self.adaptive_constant_ode = torch.tensor(1.0, dtype=torch.float32, requires_grad=False)
+        self.adaptive_constant_theta = torch.tensor(1.0, dtype=torch.float32, requires_grad=False)
+        self.adaptive_constant_res_log = []
+        self.adaptive_constant_ode_log = []
+        self.adaptive_constant_theta_log = []
     
     def normalize(self, item, column):
         stats = pd.read_csv("dataset/statistics.csv")
         item_norm = (item - torch.tensor(stats.loc[0, column]))/torch.tensor(stats.loc[1, column])
-
         return item_norm
 
     def unnormalize(self, item, column):
         stats = pd.read_csv("dataset/statistics.csv")
         item_un = torch.tensor(stats.loc[1, column]) * item + torch.tensor(stats.loc[0, column])
-
         return item_un
 
     def _Evaporator(self, x, u, p):
@@ -99,7 +96,7 @@ class PINN_Loss(nn.Module):
         p_pred, h_ref_out_pred = model_output[:, :2].T.unsqueeze(-1) # Predicted next time step state variables
         zeta, gamma, eps_tp, eps_sh = ground_truth[:, 2:].T.unsqueeze(-1) # True present time step hidden parameters
 
-        # # ODE based loss calculation
+        # ODE based loss calculation
         # p_input_un = self.unnormalize(p_input, "pressure")
         # h_ref_out_input_un = self.unnormalize(h_ref_out_input, "h_ref_out")
         # m_ref_in_un = self.unnormalize(m_ref_in, "m_ref_in")
