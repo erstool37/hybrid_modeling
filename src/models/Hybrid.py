@@ -28,7 +28,7 @@ class PINN(nn.Module):
         return output
 
 # Combined Model
-class HybridModel(nn.Module):
+class Hybrid(nn.Module):
     def __init__(self, lstm_model, pinn_model):
         super(HybridModel, self).__init__()
         self.lstm_model = lstm_model

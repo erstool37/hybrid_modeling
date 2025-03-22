@@ -14,6 +14,7 @@ class PINNLoss(nn.Module):
         super(PINNLoss, self).__init__()
         self.rate = rate
         self.model = model
+
         self.x_min = torch.tensor([100., 270.], dtype=torch.float32)
         self.x_max = torch.tensor([360., 380.], dtype=torch.float32)
         self.scale_grad = 1. / (self.x_max - self.x_min)
@@ -26,6 +27,7 @@ class PINNLoss(nn.Module):
     
     def normalize(self, item, column):
         stats = pd.read_csv("dataset/statistics.csv")
+        
         item_norm = (item - torch.tensor(stats.loc[0, column]))/torch.tensor(stats.loc[1, column])
         return item_norm
 

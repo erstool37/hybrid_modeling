@@ -10,8 +10,10 @@ from sklearn.model_selection import train_test_split
 from torch.utils.data import Subset, DataLoader
 from statistics import mean
 from src.models.PINN import PINN
-from src.losses.PINN import PINNLoss
-from src.utils.paraloader import Paraloader
+from src.models.lstmPINN import lstmPINN
+from src.losses.PINNLoss import PINNLoss
+from src.losses.ResLoss import ResLoss
+from src.utils.Paraloader import Paraloader
 
 with open("config.yaml", "r") as file:
     config = yaml.safe_load(file)
@@ -35,8 +37,8 @@ COOL = config["directories"]["cool"]
 wandb.init(project='Heat exchanger', reinit=True, resume="never", config=config)
 
 # load and split dataset
-train_ds = Paraloader(dir = PARA_DIR, stats_dir=STATS_DIR, sequence_length = SEQ_LEN)
-val_ds = Paraloader(dir = PARA_DIR, stats_dir=STATS_DIR, sequence_length = SEQ_LEN)
+train_ds = Paraloader(dir = PARA_DIR, stats_dir=STATS_DIR, sequence_length = SEQ_LEN, method = train)
+val_ds = Paraloader(dir = PARA_DIR, stats_dir=STATS_DIR, sequence_length = SEQ_LEN, method = val)
 
 indices = np.arange(len(train_ds))
 train_idx, val_idx = train_test_split(indices, test_size=0.2, shuffle=False)
@@ -48,36 +50,32 @@ train_dl = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=False, num_worker
 val_dl = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
 
 # Initialize model, loss, scheduler, and optimizer
-model = PINN(input_size=7, hidden_dim=HIDDEN_DIM, num_layers=NUM_LAYERS, output_size=6)
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model = PINN(input_size=12, output_size=2).to(device)
+# model = lstmPINN(input_size=7, hidden_dim=HIDDEN_DIM, num_layers=NUM_LAYERS, output_size=6).to(device)
 criterion = PINNLoss(rate=RATE, model = model)
-
 optimizer = optim.Adam(model.parameters(), lr=LR_RATE)
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=NUM_EPOCHS, eta_min=ETA_MIN)
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Training loop
 num_epochs = NUM_EPOCHS
-
 wandb.watch(model, criterion, log="all", log_freq=5)
-model.to(device)
 
 for epoch in range(num_epochs):
     model.train()
     train_losses = []
     print(f"Epoch {epoch+1}/{num_epochs} - Training ")
     for batch in tqdm(train_dl): 
-        model_input, ground_truth = batch
-        model_input = model_input.to(device)
-        ground_truth = ground_truth.to(device)
+        mmodel_input, ground_truth = batch.to(device)
         outputs = model(model_input)
         train_loss = criterion(model_input, outputs, ground_truth, time_step=2) # 2 second interval data
-
         train_losses.append(train_loss.item())
         optimizer.zero_grad()
         train_loss.backward(retain_graph=True)
         optimizer.step()
 
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0) # for gradient explodin
+        # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0) # for gradient exploding
+        # torch.nn.utils.clip_grad_value_(model.parameters(), clip_value=0.5) # for gradient vanishing
 
         # loss print
         if (len(train_losses)) % 20 == 0:
@@ -90,9 +88,7 @@ for epoch in range(num_epochs):
     with torch.no_grad():
         print(f"Epoch {epoch+1}/{num_epochs} - Validation")
     for batch in tqdm(val_dl):
-        model_input, ground_truth = batch
-        model_input = model_input.to(device)
-        ground_truth = ground_truth.to(device)
+        model_input, ground_truth = batch.to(device)
         outputs = model(model_input)
         val_loss = criterion(model_input, outputs, ground_truth, time_step=2)
         val_losses.append(val_loss.item())

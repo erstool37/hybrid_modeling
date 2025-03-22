@@ -6,7 +6,7 @@ from torch.utils.data import Dataset, DataLoader
 import numpy as np
 
 class Paraloader(Dataset):
-    def __init__(self, dir, stats_dir, sequence_length):
+    def __init__(self, dir, stats_dir, sequence_length, method):
         super().__init__()
         self.sequence_length = sequence_length # exists for lstmPINN
         self.ds = pd.read_csv(dir)
@@ -14,7 +14,7 @@ class Paraloader(Dataset):
 
         # normalize the dataset
         for item in self.ds.columns: 
-            self.ds[item] = normalize(self.ds[item].values, item, train)
+            self.ds[item] = normalize(self.ds[item].values, item, method)
 
         time = self.ds [['time']].astype(float).values
         state = self.ds[['pressure', 'h_ref_out']].astype(float).values
@@ -35,7 +35,7 @@ class Paraloader(Dataset):
 
         # Flatten tensors and concatenate them
         model_input = torch.cat((step_time, step_state, step_input, step_theta), dim=1)
-        ground_truth = torch.cat((pred_state, step_theta), dim=0)
+        ground_truth = torch.cat((pred_state, step_theta), dim=0) # step_theta kept for code compatibility
 
         return model_input, ground_truth
     
