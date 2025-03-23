@@ -8,6 +8,7 @@ from calculator.sys_evap_1008ver import Evaporator
 from calculator.prop_ref import Refrigerant 
 from calculator.prop_cool_evap import Coolant_Evaporator
 from calculator.utility import zero_one_scale, zero_one_descale
+from src.utils.Paraloader import Paraloader as P
 
 class PINNLoss(nn.Module):
     def __init__(self, rate, model):
@@ -24,17 +25,6 @@ class PINNLoss(nn.Module):
         self.adaptive_constant_res_log = []
         self.adaptive_constant_ode_log = []
         self.adaptive_constant_theta_log = []
-    
-    def normalize(self, item, column):
-        stats = pd.read_csv("dataset/statistics.csv")
-        
-        item_norm = (item - torch.tensor(stats.loc[0, column]))/torch.tensor(stats.loc[1, column])
-        return item_norm
-
-    def unnormalize(self, item, column):
-        stats = pd.read_csv("dataset/statistics.csv")
-        item_un = torch.tensor(stats.loc[1, column]) * item + torch.tensor(stats.loc[0, column])
-        return item_un
 
     def _Evaporator(self, x, u, p):
         # Refrigerant property functions
@@ -91,57 +81,53 @@ class PINNLoss(nn.Module):
             pass
 
     def forward(self, model_input, model_output, ground_truth, time_step):
-
-        p_input, h_ref_out_input = model_input[:,-1,:2].T.unsqueeze(-1) # Present time step state variables
-        m_ref_in, m_ref_out, h_ref_in, m_cool, T_cool_in = model_input[:, -1, 2:].T.unsqueeze(-1) # Present time step input variables
-        # p_true, h_ref_out_true = ground_truth[:, :2].T.unsqueeze(-1) # True next time step state variables
-        p_pred, h_ref_out_pred = model_output[:, :2].T.unsqueeze(-1) # Predicted next time step state variables
-        zeta, gamma, eps_tp, eps_sh = ground_truth[:, 2:].T.unsqueeze(-1) # True present time step hidden parameters
-
+        # time_step is not used but kept for compatibility with other loss functions
+        time = model_input[:, 0].unsqueeze(-1) 
+        p_input, h_ref_out_input = model_input[:,:3].T.unsqueeze(-1) # x(t)
+        m_ref_in, m_ref_out, h_ref_in, m_cool, T_cool_in = model_input[:, 3:8].T.unsqueeze(-1) # u
+        zeta, gamma, eps_tp, eps_sh = model_input[:, 8:].T.unsqueeze(-1) # p
+        p_true, h_ref_out_true = ground_truth[:, :2].T.unsqueeze(-1) # true x(t+1)
+        p_pred, h_ref_out_pred = model_output[:, :2].T.unsqueeze(-1) # pred x(t+1)
+        
         # ODE based loss calculation
-        # p_input_un = self.unnormalize(p_input, "pressure")
-        # h_ref_out_input_un = self.unnormalize(h_ref_out_input, "h_ref_out")
-        # m_ref_in_un = self.unnormalize(m_ref_in, "m_ref_in")
-        # m_ref_out_un = self.unnormalize(m_ref_out, "m_ref_out")
-        # h_ref_in_un = self.unnormalize(h_ref_in, "h_ref_in")
-        # m_cool_un = self.unnormalize(m_cool, "m_cool")
-        # T_cool_in_un = self.unnormalize(T_cool_in, "T_cool_in")
-        # zeta_un = self.unnormalize(zeta, "z_tpsh")
-        # gamma_un = self.unnormalize(gamma, "gamma")
-        # eps_tp_un = self.unnormalize(eps_tp, "eps_tp")
-        # eps_sh_un = self.unnormalize(eps_sh, "eps_sh")
-        # p_pred_un = self.unnormalize(p_pred, "pressure")
-        # h_ref_out_pred_un = self.unnormalize(h_ref_out_pred, "h_ref_out") # (batch_size, 1)
+        p_input_un = P.unnormalize(p_input, "pressure")
+        h_ref_out_input_un = P.unnormalize(h_ref_out_input, "h_ref_out")
+        m_ref_in_un = P.unnormalize(m_ref_in, "m_ref_in")
+        m_ref_out_un = P.unnormalize(m_ref_out, "m_ref_out")
+        h_ref_in_un = P.unnormalize(h_ref_in, "h_ref_in")
+        m_cool_un = P.unnormalize(m_cool, "m_cool")
+        T_cool_in_un = P.unnormalize(T_cool_in, "T_cool_in")
+        zeta_un = P.unnormalize(zeta, "z_tpsh")
+        gamma_un = P.unnormalize(gamma, "gamma")
+        eps_tp_un = P.unnormalize(eps_tp, "eps_tp")
+        eps_sh_un = P.unnormalize(eps_sh, "eps_sh")
+        p_pred_un = P.unnormalize(p_pred, "pressure")
+        h_ref_out_pred_un = P.unnormalize(h_ref_out_pred, "h_ref_out")
             
-        # x = torch.cat((p_input_un, h_ref_out_input_un), dim=-1)
-        # u = torch.cat((m_ref_in_un, m_ref_out_un, h_ref_in_un, m_cool_un, T_cool_in_un), dim=-1)
-        # p = torch.cat((zeta_un, gamma_un, eps_tp_un, eps_sh_un), dim=-1)
-
-        # mass, rhs = self._Evaporator(x, u, p) 
+        x = torch.cat((p_input_un, h_ref_out_input_un), dim=-1)
+        u = torch.cat((m_ref_in_un, m_ref_out_un, h_ref_in_un, m_cool_un, T_cool_in_un), dim=-1)
+        p = torch.cat((zeta_un, gamma_un, eps_tp_un, eps_sh_un), dim=-1)
+        mass, rhs = self._Evaporator(x, u, p)
         # mass = mass.detach() # (batch_size, 2, 2)
         # rhs = rhs.detach().unsqueeze(-1) # (batch_size, 2, 1)
 
-        # dp_dt_mod = (p_pred_un - p_input_un) / time_step # (batch_size, 1)
-        # dh_dt_mod = (h_ref_out_pred_un - h_ref_out_input_un) / time_step # (batch_size, 1)
-        # dx_dt_mod = torch.cat((dp_dt_mod, dh_dt_mod), dim=-1).unsqueeze(-1) # (batch_size, 2, 1)
-        # dx_dt_mod = zero_one_scale(dx_dt_mod, self.x_min, self.x_max) / self.scale_grad.unsqueeze(-1).unsqueeze(0).to(dx_dt_mod.device)# scaling match
+        dp_dt = torch.autograd.grad(outputs=p_pred_un, inputs=time, retain_graph=True, create_graph=True)
+        dh_dt = torch.autograd.grad(outputs=h_ref_out_pred_un, inputs=time, retain_graph=True, create_graph=True)
+        dx_dt = torch.cat((dp_dt, dh_dt), dim=-1).unsqueeze(-1) # (batch_size, 2, 1)
+        dx_dt_mod = zero_one_scale(dx_dt_mod, self.x_min, self.x_max) / self.scale_grad.unsqueeze(-1).unsqueeze(0).to(dx_dt_mod.device)# scaling match
         
         # print(dx_dt_mod)
         # loss_ode = torch.bmm(mass, dx_dt_mod) - rhs
 
         # loss calculation
         loss_res = F.mse_loss(input=model_output[:, :2], target=ground_truth[:, :2])
-        # loss_theta = F.mse_loss(input=model_output[:, 2], target=ground_truth[:, 2])
-        # loss_ode = F.mse_loss(input=loss_ode, target=torch.zeros_like(rhs))
-        
+        loss_ode = F.mse_loss(input=loss_ode, target=torch.zeros_like(rhs))
         # self._compute_adaptive_constant(loss_res, loss_ode, loss_theta, self.model)
 
-        total_loss = loss_res 
+        total_loss = loss_res + loss_ode 
 
-        wandb.log({"loss_res_x_chunk": loss_res})
-        # wandb.log({"loss_res_ode": loss_ode})
-        # wandb.log({"loss_res_theta":loss_theta})
-        # wandb.log({"loss_res_theta_chunk": self.adaptive_constant_theta * loss_theta})
-        # wandb.log({"loss_res_ode_chunk": self.adaptive_constant_ode * loss_ode})
+        wandb.log({"loss_res": loss_res})
+        wandb.log({"loss_ode": loss_ode})
+        # wandb.log({"loss_ode_chunk": self.adaptive_constant_ode * loss_ode})
     
         return total_loss

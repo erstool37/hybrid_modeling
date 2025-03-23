@@ -1,7 +1,7 @@
 import torch
-from src.models.pinn import PINN
-from src.losses.pinn_loss import PINN_Loss as L
-from src.utils.paraloader import Paraloader
+from src.models.PINN import PINN
+from src.losses.PINNLoss import PINN_Loss as L
+from src.utils.Paraloader import Paraloader
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Subset, DataLoader
 import numpy as np

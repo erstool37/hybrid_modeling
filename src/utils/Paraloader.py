@@ -1,9 +1,11 @@
 import os.path as osp
+import os
 import glob
 import pandas as pd
 import torch
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
+import inspect
 
 class Paraloader(Dataset):
     def __init__(self, dir, stats_dir, sequence_length, method):
@@ -14,7 +16,7 @@ class Paraloader(Dataset):
 
         # normalize the dataset
         for item in self.ds.columns: 
-            self.ds[item] = normalize(self.ds[item].values, item, method)
+            self.ds[item] = self.normalize(self.ds[item].values, item, method)
 
         time = self.ds [['time']].astype(float).values
         state = self.ds[['pressure', 'h_ref_out']].astype(float).values
@@ -31,7 +33,7 @@ class Paraloader(Dataset):
         step_state = self.states[idx] # current time step state
         step_input = self.inputs[idx] # current time step input
         step_theta = self.thetas[idx] # current time step theta
-        pred_state = self.states[idx] # next time step state
+        pred_state = self.states[idx + 1] # next time step state
 
         # Flatten tensors and concatenate them
         model_input = torch.cat((step_time, step_state, step_input, step_theta), dim=1)
@@ -72,7 +74,7 @@ class Paraloader(Dataset):
         item_norm = (item - min_item) / (max_item - min_item)
         return item_norm
 
-    def unnormalize(self, item, column, mehthod):
+    def unnormalize(self, item, column, method):
         script_dir = os.path.dirname(os.path.abspath(inspect.getfile(self.__class__)))
         file_path = os.path.join(script_dir, 'dataset', f'statistics_{method}.csv')
         stats = pd.read_csv(file_path)
