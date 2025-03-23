@@ -5,7 +5,7 @@ import wandb
 import yaml
 import numpy as np
 import pandas
-import tqdm
+from tqdm import tqdm
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Subset, DataLoader
 from statistics import mean
@@ -37,8 +37,8 @@ COOL = config["directories"]["cool"]
 wandb.init(project='Heat exchanger', reinit=True, resume="never", config=config)
 
 # load and split dataset
-train_ds = Paraloader(dir = PARA_DIR, stats_dir=STATS_DIR, sequence_length = SEQ_LEN, method = train)
-val_ds = Paraloader(dir = PARA_DIR, stats_dir=STATS_DIR, sequence_length = SEQ_LEN, method = val)
+train_ds = Paraloader(dir = PARA_DIR, sequence_length = SEQ_LEN, method = 'total')
+val_ds = Paraloader(dir = PARA_DIR, sequence_length = SEQ_LEN, method = 'total')
 
 indices = np.arange(len(train_ds))
 train_idx, val_idx = train_test_split(indices, test_size=0.2, shuffle=False)
@@ -46,8 +46,8 @@ train_idx, val_idx = train_test_split(indices, test_size=0.2, shuffle=False)
 train_ds = Subset(train_ds, train_idx)
 val_ds = Subset(val_ds, val_idx)
 
-train_dl = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
-val_dl = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
+train_dl = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS)
+val_dl = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS)
 
 # Initialize model, loss, scheduler, and optimizer
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -66,7 +66,9 @@ for epoch in range(num_epochs):
     train_losses = []
     print(f"Epoch {epoch+1}/{num_epochs} - Training ")
     for batch in tqdm(train_dl): 
-        mmodel_input, ground_truth = batch.to(device)
+        model_input, ground_truth = batch
+        model_input = model_input.to(device).requires_grad_(True)
+        ground_truth = ground_truth.to(device).requires_grad_(True)
         outputs = model(model_input)
         train_loss = criterion(model_input, outputs, ground_truth, time_step=2) # 2 second interval data
         train_losses.append(train_loss.item())
@@ -88,7 +90,9 @@ for epoch in range(num_epochs):
     with torch.no_grad():
         print(f"Epoch {epoch+1}/{num_epochs} - Validation")
     for batch in tqdm(val_dl):
-        model_input, ground_truth = batch.to(device)
+        model_input, ground_truth = batch
+        model_input = model_input.to(device).requires_grad_(True)
+        ground_truth = ground_truth.to(device).requires_grad_(True)
         outputs = model(model_input)
         val_loss = criterion(model_input, outputs, ground_truth, time_step=2)
         val_losses.append(val_loss.item())

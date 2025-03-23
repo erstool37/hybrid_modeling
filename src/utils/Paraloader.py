@@ -8,15 +8,15 @@ import numpy as np
 import inspect
 
 class Paraloader(Dataset):
-    def __init__(self, dir, stats_dir, sequence_length, method):
+    def __init__(self, dir, sequence_length, method):
         super().__init__()
         self.sequence_length = sequence_length # exists for lstmPINN
         self.ds = pd.read_csv(dir)
-        self.stats = pd.read_csv(stats_dir)
+        self.method = method
 
         # normalize the dataset
         for item in self.ds.columns: 
-            self.ds[item] = self.normalize(self.ds[item].values, item, method)
+            self.ds[item] = self.normalize(torch.tensor(self.ds[item].values), item, self.method)
 
         time = self.ds [['time']].astype(float).values
         state = self.ds[['pressure', 'h_ref_out']].astype(float).values
@@ -30,19 +30,18 @@ class Paraloader(Dataset):
 
     def __getitem__(self, idx):
         step_time = self.times[idx]
-        step_state = self.states[idx] # current time step state
-        step_input = self.inputs[idx] # current time step input
-        step_theta = self.thetas[idx] # current time step theta
-        pred_state = self.states[idx + 1] # next time step state
+        step_state = self.states[idx]
+        step_input = self.inputs[idx]
+        step_theta = self.thetas[idx]
+        pred_state = self.states[idx + 1]
 
         # Flatten tensors and concatenate them
-        model_input = torch.cat((step_time, step_state, step_input, step_theta), dim=1)
+        model_input = torch.cat((step_time, step_state, step_input, step_theta), dim=-1)
         ground_truth = torch.cat((pred_state, step_theta), dim=0) # step_theta kept for code compatibility
-
         return model_input, ground_truth
     
     def Znormalize(self, item, column, method):
-        script_dir = os.path.dirname(os.path.abspath(inspect.getfile(self.__class__)))
+        script_dir = os.path.dirname(os.path.abspath(inspect.getfile(Paraloader)))
         file_path = os.path.join(script_dir, 'dataset', f'statistics_{method}.csv')
         stats = pd.read_csv(file_path)
 
@@ -53,8 +52,8 @@ class Paraloader(Dataset):
         return item_norm
 
     def Zunnormalize(self, item, column, method):
-        script_dir = os.path.dirname(os.path.abspath(inspect.getfile(self.__class__)))
-        file_path = os.path.join(script_dir, 'dataset', f'statistics_{method}.csv')
+        script_dir = os.path.dirname(os.path.abspath(inspect.getfile(Paraloader)))
+        file_path = os.path.join(script_dir, '../../dataset', f'statistics_{method}.csv')
         stats = pd.read_csv(file_path)
 
         mean_item = torch.tensor(stats.loc[0, column])
@@ -64,8 +63,8 @@ class Paraloader(Dataset):
         return item_un
     
     def normalize(self, item, column, method):
-        script_dir = os.path.dirname(os.path.abspath(inspect.getfile(self.__class__)))
-        file_path = os.path.join(script_dir, 'dataset', f'statistics_{method}.csv')
+        script_dir = os.path.dirname(os.path.abspath(inspect.getfile(Paraloader)))
+        file_path = os.path.join(script_dir, '../../dataset', f'statistics_{method}.csv')
         stats = pd.read_csv(file_path)
 
         max_item = torch.tensor(stats.loc[2, column])
@@ -74,9 +73,10 @@ class Paraloader(Dataset):
         item_norm = (item - min_item) / (max_item - min_item)
         return item_norm
 
-    def unnormalize(self, item, column, method):
-        script_dir = os.path.dirname(os.path.abspath(inspect.getfile(self.__class__)))
-        file_path = os.path.join(script_dir, 'dataset', f'statistics_{method}.csv')
+    @staticmethod
+    def unnormalize(item, column, method):
+        script_dir = os.path.dirname(os.path.abspath(inspect.getfile(Paraloader)))
+        file_path = os.path.join(script_dir, '../../dataset', f'statistics_{method}.csv')
         stats = pd.read_csv(file_path)
 
         max_item = torch.tensor(stats.loc[2, column])
@@ -85,8 +85,19 @@ class Paraloader(Dataset):
         item_un = item * (max_item - min_item) + min_item
         return item_un
 
+    @staticmethod
+    def gradunscaler(column, method):
+        script_dir = os.path.dirname(os.path.abspath(inspect.getfile(Paraloader)))
+        file_path = os.path.join(script_dir, '../../dataset', f'statistics_{method}.csv')
+        stats = pd.read_csv(file_path)
+
+        max_item = torch.tensor(stats.loc[2, column])
+        min_item = torch.tensor(stats.loc[3, column])
+
+        return 1 / (max_item - min_item)
+
     def __len__(self):
-        return len(self.time)
+        return len(self.times) - 1
 
     """ for lstmPINN
     def __getitem__(self, idx):
