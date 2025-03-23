@@ -1,5 +1,6 @@
 import torch
 from src.models.PINN import PINN
+from src.models.lstmPINN import lstmPINN
 from src.losses.PINNLoss import PINNLoss as L
 from src.utils.Paraloader import Paraloader
 from sklearn.model_selection import train_test_split
@@ -12,13 +13,13 @@ from src.utils.Paraloader import Paraloader as P
 
 PARA_DIR = "dataset/dataset.csv"
 STATS_DIR = "dataset/statistics_total.csv"
-CHECKPOINT = "src/models/weights_pinn/PINN0323_03.pth"
+CHECKPOINT = "src/models/weights_pinn/PINN0324_04.pth"
 
 SEQ_LEN=30
 BATCH_SIZE = 1
 NUM_WORKERS = 1
-HIDDEN_DIM = 128
-NUM_LAYERS = 16
+HIDDEN_DIM = 256
+NUM_LAYERS = 3
 SIZE = 0.05
 
 def h_satu(x):
@@ -36,7 +37,8 @@ val_dl = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=NU
 
 # load model
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model = PINN(input_size=12, output_size=2).to(device)
+# model = PINN(input_size=12, output_size=2).to(device)
+model = lstmPINN(input_size=7, hidden_dim=HIDDEN_DIM, num_layers=NUM_LAYERS, output_size=6).to(device)
 model.load_state_dict(torch.load(CHECKPOINT))
 model.eval()
 model.cuda()
@@ -58,20 +60,20 @@ for batch in val_dl:
     ground_truth = ground_truth.detach().cpu()
     p_pred = P.unnormalize(outputs[:,0],"pressure", "total")
     h_pred = P.unnormalize(outputs[:,1],"h_ref_out", "total")
-    # zeta_pred = P.unnormalize(outputs[:,2], "z_tpsh", "total")
+    zeta_pred = P.unnormalize(outputs[:,2], "z_tpsh", "total")
 
     h_sat = h_satu(p_pred.item())
     p_true = P.unnormalize(ground_truth[:,0],"pressure", "total")
     h_true = P.unnormalize(ground_truth[:,1],"h_ref_out", "total")
-    # zeta_true = P.unnormalize(ground_truth[:,2], "z_tpsh", "total")
+    zeta_true = P.unnormalize(ground_truth[:,2], "z_tpsh", "total")
 
     p_pred_list.append(p_pred.item())
     p_true_list.append(p_true.item())
     h_pred_list.append(h_pred)
     h_true_list.append(h_true)
     h_sat_list.append(h_sat)
-    # zeta_pred_list.append(zeta_pred.item())
-    # zeta_true_list.append(zeta_true.item())
+    zeta_pred_list.append(zeta_pred.item())
+    zeta_true_list.append(zeta_true.item())
     
 # Plot predicted vs true pressure
 plt.figure(figsize=(10, 5))
@@ -95,14 +97,14 @@ plt.legend()
 plt.grid()
 plt.savefig('inference/predict_h.png', dpi=300, bbox_inches='tight')
 
-# plt.figure(figsize=(10, 5))
-# plt.plot(zeta_pred_list, label="Predicted zeta", linestyle='--')
-# plt.plot(zeta_true_list, label="True zeta", linestyle='-')
-# plt.title("Predicted vs True zeta")
-# plt.xlabel("Sample Index")
-# plt.ylabel("Normalized zeta")
-# plt.legend()
-# plt.grid()
-# plt.savefig('inference/predict_z.png', dpi=300, bbox_inches='tight')
+plt.figure(figsize=(10, 5))
+plt.plot(zeta_pred_list, label="Predicted zeta", linestyle='--')
+plt.plot(zeta_true_list, label="True zeta", linestyle='-')
+plt.title("Predicted vs True zeta")
+plt.xlabel("Sample Index")
+plt.ylabel("Normalized zeta")
+plt.legend()
+plt.grid()
+plt.savefig('inference/predict_z.png', dpi=300, bbox_inches='tight')
 
 plt.close()

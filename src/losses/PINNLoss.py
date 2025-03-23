@@ -115,16 +115,15 @@ class PINNLoss(nn.Module):
         # grad_output = torch.ones(time.shape[0]).unsqueeze(-1).to(p_pred.device)
         # dp_dt = torch.autograd.grad(outputs=p_pred_un, inputs=time, grad_outputs=grad_output, retain_graph=True, create_graph=True)
         # dh_dt = torch.autograd.grad(outputs=h_ref_out_pred_un, inputs=time, grad_outputs=grad_output, retain_graph=True, create_graph=True)
-
-
+        
         dp_dt = (p_pred_un - p_input_un) / 2
         dh_dt = (h_ref_out_pred_un - h_ref_out_input_un) / 2
+
         # convert to real world scale
         # dp_dt = dp_dt * P.graddescaler('time', 'total') / P.graddescaler('pressure', 'total')
         # dh_dt = dh_dt * P.graddescaler('time', 'total') / P.graddescaler('h_ref_out', 'total')   
 
         dx_dt = torch.cat((dp_dt, dh_dt), dim=-1).unsqueeze(-1)
-        # dx_dt_mod = zero_one_scale(dx_dt_mod, self.x_min, self.x_max) / self.scale_grad.unsqueeze(-1).unsqueeze(0).to(dx_dt_mod.device)# scaling match
         
         loss_ode = torch.bmm(mass, dx_dt) - rhs
 

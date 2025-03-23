@@ -29,17 +29,20 @@ class Paraloader(Dataset):
         self.thetas = torch.tensor(theta, dtype=torch.float32)
 
     def __getitem__(self, idx):
-        step_time = self.times[idx]
-        step_state = self.states[idx]
-        step_input = self.inputs[idx]
-        step_theta = self.thetas[idx]
-        pred_state = self.states[idx + 1]
+        step_state = self.states[idx : idx + self.sequence_length] # current time step state
+        step_input = self.inputs[idx : idx + self.sequence_length] # current time step input
+        step_theta = self.thetas[idx + self.sequence_length - 1] # current time step theta
+        pred_state = self.states[idx + self.sequence_length] # next time step state
 
         # Flatten tensors and concatenate them
-        model_input = torch.cat((step_time, step_state, step_input, step_theta), dim=-1)
-        ground_truth = torch.cat((pred_state, step_theta), dim=0) # step_theta kept for code compatibility
+        model_input = torch.cat((step_state, step_input), dim=1)
+        ground_truth = torch.cat((pred_state, step_theta), dim=0)
+
         return model_input, ground_truth
-    
+
+    def __len__(self):
+        return len(self.states) - self.sequence_length
+
     def Znormalize(self, item, column, method):
         script_dir = os.path.dirname(os.path.abspath(inspect.getfile(Paraloader)))
         file_path = os.path.join(script_dir, 'dataset', f'statistics_{method}.csv')
@@ -96,22 +99,23 @@ class Paraloader(Dataset):
 
         return 1 / (max_item - min_item)
 
-    def __len__(self):
-        return len(self.times) - 1
+    
 
-    """ for lstmPINN
+    """ for PINN
     def __getitem__(self, idx):
-        step_state = self.states[idx : idx + self.sequence_length] # current time step state
-        step_input = self.inputs[idx : idx + self.sequence_length] # current time step input
-        step_theta = self.thetas[idx + self.sequence_length - 1] # current time step theta
-        pred_state = self.states[idx + self.sequence_length] # next time step state
+        step_time = self.times[idx]
+        step_state = self.states[idx]
+        step_input = self.inputs[idx]
+        step_theta = self.thetas[idx]
+        pred_state = self.states[idx + 1]
 
         # Flatten tensors and concatenate them
-        model_input = torch.cat((step_state, step_input, step_theta), dim=1)
-        ground_truth = torch.cat((pred_state, step_theta), dim=0)
-
+        model_input = torch.cat((step_time, step_state, step_input, step_theta), dim=-1)
+        ground_truth = torch.cat((pred_state, step_theta), dim=0) # step_theta kept for code compatibility
         return model_input, ground_truth
 
     def __len__(self):
-        return len(self.states) - self.sequence_length
+        return len(self.times) - 1
+
+
     """

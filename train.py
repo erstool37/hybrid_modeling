@@ -12,6 +12,7 @@ from statistics import mean
 from src.models.PINN import PINN
 from src.models.lstmPINN import lstmPINN
 from src.losses.PINNLoss import PINNLoss
+from src.losses.lstmPINNLoss import lstmPINNLoss
 from src.losses.ResLoss import ResLoss
 from src.utils.Paraloader import Paraloader
 
@@ -47,13 +48,16 @@ train_ds = Subset(train_ds, train_idx)
 val_ds = Subset(val_ds, val_idx)
 
 train_dl = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS)
-val_dl = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS)
+val_dl = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
 
 # Initialize model, loss, scheduler, and optimizer
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model = PINN(input_size=12, output_size=2).to(device)
-# model = lstmPINN(input_size=7, hidden_dim=HIDDEN_DIM, num_layers=NUM_LAYERS, output_size=6).to(device)
-criterion = PINNLoss(rate=RATE, model = model)
+# model = PINN(input_size=12, output_size=2).to(device)
+# criterion = PINNLoss(rate=RATE, model = model)
+
+model = lstmPINN(input_size=7, hidden_dim=HIDDEN_DIM, num_layers=NUM_LAYERS, output_size=6).to(device)
+criterion = lstmPINNLoss(rate=RATE, model = model)
+
 optimizer = optim.Adam(model.parameters(), lr=LR_RATE)
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=NUM_EPOCHS, eta_min=ETA_MIN)
 
@@ -73,7 +77,7 @@ for epoch in range(num_epochs):
         train_loss = criterion(model_input, outputs, ground_truth, time_step=2) # 2 second interval data
         train_losses.append(train_loss.item())
         optimizer.zero_grad()
-        train_loss.backward(retain_graph=True)
+        train_loss.backward()
         optimizer.step()
 
         # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0) # for gradient exploding

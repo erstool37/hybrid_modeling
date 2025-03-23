@@ -1,17 +1,17 @@
 settings:
   batch_size : 1024
   num_workers : 2
-  num_epochs : 100
-  lr_rate : 1e-2
-  hidden_dim : 128
-  num_layers : 16 # 32 originally
+  num_epochs : 40
+  lr_rate : 1e-4
+  hidden_dim : 256
+  num_layers : 3
   rate : 0.9
   sequence_length : 30
-  eta_min : 1e-8
+  eta_min : 1e-7
 
 directories:
   para_dir : 'dataset/dataset.csv'
   stats_dir : 'dataset/statistics.csv'
-  checkpoint : "src/models/weights_pinn/PINN0323_03.pth" # freshly trained model name
+  checkpoint : "src/models/weights_pinn/PINN0324_04.pth" # freshly trained model name
   ref : 'dataset/reference'
   cool : 'dataset/cooling'
