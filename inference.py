@@ -13,7 +13,7 @@ from src.utils.Paraloader import Paraloader as P
 
 PARA_DIR = "dataset/dataset.csv"
 STATS_DIR = "dataset/statistics_total.csv"
-CHECKPOINT = "src/models/weights_pinn/PINN0324_04.pth"
+CHECKPOINT = "src/models/weights_pinn/PINN0324_05.pth"
 
 SEQ_LEN=30
 BATCH_SIZE = 1

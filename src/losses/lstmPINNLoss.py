@@ -120,9 +120,9 @@ class lstmPINNLoss(nn.Module):
             loss = torch.mean((torch.log1p(torch.clamp(input, min=0)) - torch.log1p(torch.clamp(target, min=0))) ** 2)
             return loss
 
-        loss_res = F.mse_loss(input=model_output[:, :2], target=ground_truth[:, :2])
-        loss_theta = F.mse_loss(input=model_output[:, 2:], target=ground_truth[:, 2:])
-        loss_ode = F.mse_loss(input=loss_ode, target=torch.zeros_like(rhs))
+        loss_res = MSLE(input=model_output[:, :2], target=ground_truth[:, :2])
+        loss_theta = MSLE(input=model_output[:, 2:], target=ground_truth[:, 2:])
+        loss_ode = MSLE(input=loss_ode, target=torch.zeros_like(rhs))
         
         # self._compute_adaptive_constant(loss_res, loss_ode, loss_theta, self.model)
 
@@ -147,7 +147,7 @@ class lstmPINNLoss(nn.Module):
         wandb.log({"loss_ode": loss_ode})
         # wandb.log({"loss_theta_chunk": self.adaptive_constant_theta * loss_theta})
         # wandb.log({"loss_ode_chunk": self.adaptive_constant_ode * loss_ode})
-        wandb.log({"loss_theta_chunk": 5 * loss_ode})
+        wandb.log({"loss_theta_chunk": 5 * loss_theta})
 
         return total_loss
 
