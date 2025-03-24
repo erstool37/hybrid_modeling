@@ -79,6 +79,10 @@ class lstmPINNLoss(nn.Module):
             pass
 
     def forward(self, model_input, model_output, ground_truth, time_step):
+        def MSLE(input, target):
+            loss = torch.mean((torch.log1p(torch.clamp(input, min=0)) - torch.log1p(torch.clamp(target, min=0))) ** 2)
+            return loss
+        
         # time_step is not required, but kept for train.py code compatibility
         time = model_input[:,-1,:2].T.unsqueeze(-1)
         p_input, h_ref_out_input = model_input[:,-1,:2].T.unsqueeze(-1) # Present time step state variables
@@ -116,41 +120,25 @@ class lstmPINNLoss(nn.Module):
         loss_ode = torch.bmm(mass, dx_dt) - rhs
 
         # loss calculation
-        def MSLE(input, target):
-            loss = torch.mean((torch.log1p(torch.clamp(input, min=0)) - torch.log1p(torch.clamp(target, min=0))) ** 2)
-            return loss
+        # loss_res = MSLE(input=model_output[:, :2], target=ground_truth[:, :2])
+        # loss_theta = MSLE(input=model_output[:, 2:], target=ground_truth[:, 2:])
+        # loss_ode = MSLE(input=loss_ode, target=torch.zeros_like(rhs))
 
-        loss_res = MSLE(input=model_output[:, :2], target=ground_truth[:, :2])
-        loss_theta = MSLE(input=model_output[:, 2:], target=ground_truth[:, 2:])
-        loss_ode = MSLE(input=loss_ode, target=torch.zeros_like(rhs))
-        
-        # self._compute_adaptive_constant(loss_res, loss_ode, loss_theta, self.model)
+        # MSE LOSS VERSION
+        loss_res = F.mse_loss(input=model_output[:, :2], target=ground_truth[:, :2])
+        loss_theta = F.mse_loss(input=model_output[:, 2:], target=ground_truth[:, 2:])
+        loss_ode = F.mse_loss(input=loss_ode, target=torch.zeros_like(rhs))
 
-        # grad_res_data = torch.autograd.grad(loss_res, self.model.parameters(), retain_graph=True, create_graph=True)
-        # grad_theta_data = torch.autograd.grad(loss_theta, self.model.parameters(), retain_graph=True, create_graph=True)
-        # grad_ode_data = torch.autograd.grad(loss_ode, self.model.parameters(), retain_graph=True, create_graph=True)
-    
-        # grad_res = sum(g.norm() for g in grad_res_data)
-        # grad_theta = sum(g.norm() for g in grad_theta_data)
-        # grad_ode = sum(g.norm() for g in grad_ode_data)
-
-        # constant_res = grad_res / (grad_res+ grad_theta + grad_ode)
-        # constant_theta = grad_theta / (grad_res+ grad_theta + grad_ode)
-        # constant_ode = grad_ode / (grad_res+ grad_theta + grad_ode)
-
-        # total_loss = constant_res * loss_res + constant_theta * loss_theta + constant_ode * loss_ode
-        # total_loss = loss_res + self.adaptive_constant_theta * loss_theta + self.adaptive_constant_ode * loss_ode
+        # constant tuning from here
         total_loss = loss_res + 5 * loss_theta + loss_ode
-
         wandb.log({"loss_res": loss_res})
         wandb.log({"loss_theta":loss_theta})
         wandb.log({"loss_ode": loss_ode})
-        # wandb.log({"loss_theta_chunk": self.adaptive_constant_theta * loss_theta})
-        # wandb.log({"loss_ode_chunk": self.adaptive_constant_ode * loss_ode})
+        wandb.log({"loss_res_chunk":  loss_res})
         wandb.log({"loss_theta_chunk": 5 * loss_theta})
-
+        wandb.log({"loss_ode_chunk": loss_ode})
+        
         return total_loss
-
 
 # for previous lstmPINN loss
         # dp_dt_mod = (p_pred_un - p_input_un) / time_step # (batch_size, 1)
@@ -159,3 +147,52 @@ class lstmPINNLoss(nn.Module):
         # dx_dt_mod = zero_one_scale(dx_dt_mod, self.x_min, self.x_max) / self.scale_grad.unsqueeze(-1).unsqueeze(0).to(dx_dt_mod.device)# scaling match
         # print(dx_dt_mod)
         # loss_ode = torch.bmm(mass, dx_dt_mod) - rhs  
+
+# for mean/grad weights, 2025 paper, for even training, however oscillates for ode_loss. FAIL
+    """
+        grad_res = torch.autograd.grad(loss_res, self.model.parameters(), retain_graph=True, create_graph=True)
+        grad_theta = torch.autograd.grad(loss_theta, self.model.parameters(), retain_graph=True, create_graph=True)
+        grad_ode = torch.autograd.grad(loss_ode, self.model.parameters(), retain_graph=True, create_graph=True)
+
+        grad_norm_res = torch.norm(torch.cat([g.flatten() for g in grad_res]))
+        grad_norm_theta = torch.norm(torch.cat([g.flatten() for g in grad_theta]))
+        grad_norm_ode = torch.norm(torch.cat([g.flatten() for g in grad_ode]))
+        
+        mean_grad = (grad_norm_res + grad_norm_theta + grad_norm_ode) / 3
+
+        constant_res = mean_grad / (grad_norm_res + 1e-8)
+        constant_theta = mean_grad / (grad_norm_theta + 1e-8)
+        constant_ode = mean_grad / (grad_norm_ode + 1e-8)
+
+        total_loss = constant_res * loss_res + constant_theta * loss_theta + constant_ode * loss_ode
+
+        wandb.log({"loss_res": loss_res})
+        wandb.log({"loss_theta":loss_theta})
+        wandb.log({"loss_ode": loss_ode})
+        wandb.log({"loss_res_chunk":  constant_res * loss_res})
+        wandb.log({"loss_theta_chunk": constant_theta * loss_theta})
+        wandb.log({"loss_ode_chunk": constant_ode * loss_ode})
+    """
+    
+# for compute_adaptive_constant. battery paper, for even training, oscillates for ode loss,
+    """
+        self._compute_adaptive_constant(loss_res, loss_ode, loss_theta, self.model)
+        total_loss = loss_res + self.adaptive_constant_theta * loss_theta + self.adaptive_constant_ode * loss_ode
+        wandb.log({"loss_res": loss_res})
+        wandb.log({"loss_theta":loss_theta})
+        wandb.log({"loss_ode": loss_ode})
+        wandb.log({"loss_res_chunk":  loss_res})
+        wandb.log({"loss_theta_chunk": self.adaptive_constant_theta * loss_theta})
+        wandb.log({"loss_ode_chunk": self.adaptive_constant_ode * loss_ode})
+    """
+
+# for heuristic based testing, 5 for theta currently the best, theta prediction compulsory for correct 
+    """
+        # total_loss = loss_res + 5 * loss_theta + loss_ode
+        wandb.log({"loss_res": loss_res})
+        wandb.log({"loss_theta":loss_theta})
+        wandb.log({"loss_ode": loss_ode})
+        wandb.log({"loss_res_chunk":  loss_res})
+        wandb.log({"loss_theta_chunk": 5 * loss_theta})
+        wandb.log({"loss_ode_chunk": loss_ode})
+    """

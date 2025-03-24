@@ -8,7 +8,8 @@ class lstmPINN(nn.Module):
         self.fc = nn.Linear(hidden_dim, output_size)
         
     def forward(self, x):
-        output, _ = self.lstm(x[:,:,:7]) 
+        with torch.backends.cudnn.flags(enabled=False):
+            output, _ = self.lstm(x[:,:,:7]) 
         output = output[:, -1, :] # (batch_size, hidden_dim)
         output = self.fc(output) # (batch_size, output_size)
         return output
