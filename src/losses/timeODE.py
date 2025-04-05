@@ -7,13 +7,19 @@ import wandb
 from .calculator.sys_evap_1008ver import Evaporator
 from .calculator.prop_ref import Refrigerant 
 from .calculator.prop_cool_evap import Coolant_Evaporator
-from src.utils.Paraloader import Paraloader as P
+from .calculator.utility import zero_one_scale, zero_one_descale
+from datasets.Parameterloader import Paraloader as P
 
-class lstmPINNLoss(nn.Module):
+class timeODE(nn.Module):
+    """
+    corresponding loss function for time inputted PINN
+    DISCARDED
+    """
     def __init__(self, rate, model):
-        super(lstmPINNLoss, self).__init__()
+        super(timeODE, self).__init__()
         self.rate = rate
         self.model = model
+
         self.x_min = torch.tensor([100., 270.], dtype=torch.float32)
         self.x_max = torch.tensor([360., 380.], dtype=torch.float32)
         self.scale_grad = 1. / (self.x_max - self.x_min)
@@ -79,18 +85,14 @@ class lstmPINNLoss(nn.Module):
             pass
 
     def forward(self, model_input, model_output, ground_truth, time_step):
-        def MSLE(input, target):
-            loss = torch.mean((torch.log1p(torch.clamp(input, min=0)) - torch.log1p(torch.clamp(target, min=0))) ** 2)
-            return loss
+        # time_step is not used but kept for compatibility with other loss functions
+        time = model_input[:, 0].unsqueeze(-1) 
+        p_input, h_ref_out_input = model_input[:,1:3].T.unsqueeze(-1) # x(t)
+        m_ref_in, m_ref_out, h_ref_in, m_cool, T_cool_in = model_input[:, 3:8].T.unsqueeze(-1) # u
+        zeta, gamma, eps_tp, eps_sh = model_input[:, 8:].T.unsqueeze(-1) # p
+        p_true, h_ref_out_true = ground_truth[:, :2].T.unsqueeze(-1) # true x(t+1)
+        p_pred, h_ref_out_pred = model_output[:, :2].T.unsqueeze(-1) # pred x(t+1)
         
-        # time_step is not required, but kept for train.py code compatibility
-        time = model_input[:,-1,:2].T.unsqueeze(-1)
-        p_input, h_ref_out_input = model_input[:,-1,:2].T.unsqueeze(-1) # Present time step state variables
-        m_ref_in, m_ref_out, h_ref_in, m_cool, T_cool_in = model_input[:, -1, 2:].T.unsqueeze(-1) # Present time step input variables
-        # p_true, h_ref_out_true = ground_truth[:, :2].T.unsqueeze(-1) # True next time step state variables
-        p_pred, h_ref_out_pred = model_output[:, :2].T.unsqueeze(-1) # Predicted next time step state variables
-        zeta, gamma, eps_tp, eps_sh = ground_truth[:, 2:].T.unsqueeze(-1) # True present time step hidden parameters
-
         # ODE based loss calculation
         p_input_un = P.unnormalize(p_input, "pressure", "total")
         h_ref_out_input_un = P.unnormalize(h_ref_out_input, "h_ref_out", "total")
@@ -114,85 +116,29 @@ class lstmPINNLoss(nn.Module):
         mass = mass.detach()
         rhs = rhs.detach().unsqueeze(-1)
 
+        # grad_output = torch.ones(time.shape[0]).unsqueeze(-1).to(p_pred.device)
+        # dp_dt = torch.autograd.grad(outputs=p_pred_un, inputs=time, grad_outputs=grad_output, retain_graph=True, create_graph=True)
+        # dh_dt = torch.autograd.grad(outputs=h_ref_out_pred_un, inputs=time, grad_outputs=grad_output, retain_graph=True, create_graph=True)
+        
         dp_dt = (p_pred_un - p_input_un) / 2
         dh_dt = (h_ref_out_pred_un - h_ref_out_input_un) / 2
+
+        # convert to real world scale
+        # dp_dt = dp_dt * P.graddescaler('time', 'total') / P.graddescaler('pressure', 'total')
+        # dh_dt = dh_dt * P.graddescaler('time', 'total') / P.graddescaler('h_ref_out', 'total')   
+
         dx_dt = torch.cat((dp_dt, dh_dt), dim=-1).unsqueeze(-1)
         loss_ode = torch.bmm(mass, dx_dt) - rhs
 
         # loss calculation
-        # loss_res = MSLE(input=model_output[:, :2], target=ground_truth[:, :2])
-        # loss_theta = MSLE(input=model_output[:, 2:], target=ground_truth[:, 2:])
-        # loss_ode = MSLE(input=loss_ode, target=torch.zeros_like(rhs))
-
-        # MSE LOSS VERSION
-        loss_res = F.mse_loss(input=model_output[:, :2], target=ground_truth[:, :2])
-        loss_theta = F.mse_loss(input=model_output[:, 2:], target=ground_truth[:, 2:])
+        loss_res = F.mse_loss(input=x, target=x_ans)
         loss_ode = F.mse_loss(input=loss_ode, target=torch.zeros_like(rhs))
+        # self._compute_adaptive_constant(loss_res, loss_ode, loss_theta, self.model)
 
-        # constant tuning from here
-        total_loss = loss_res + 5 * loss_theta + loss_ode
-        wandb.log({"loss_res": loss_res})
-        wandb.log({"loss_theta":loss_theta})
-        wandb.log({"loss_ode": loss_ode})
-        wandb.log({"loss_res_chunk":  loss_res})
-        wandb.log({"loss_theta_chunk": 5 * loss_theta})
-        wandb.log({"loss_ode_chunk": loss_ode})
-        
-        return total_loss
-
-# for previous lstmPINN loss
-        # dp_dt_mod = (p_pred_un - p_input_un) / time_step # (batch_size, 1)
-        # dh_dt_mod = (h_ref_out_pred_un - h_ref_out_input_un) / time_step # (batch_size, 1)
-        # dx_dt_mod = torch.cat((dp_dt_mod, dh_dt_mod), dim=-1).unsqueeze(-1) # (batch_size, 2, 1)
-        # dx_dt_mod = zero_one_scale(dx_dt_mod, self.x_min, self.x_max) / self.scale_grad.unsqueeze(-1).unsqueeze(0).to(dx_dt_mod.device)# scaling match
-        # print(dx_dt_mod)
-        # loss_ode = torch.bmm(mass, dx_dt_mod) - rhs  
-
-# for mean/grad weights, 2025 paper, for even training, however oscillates for ode_loss. FAIL
-    """
-        grad_res = torch.autograd.grad(loss_res, self.model.parameters(), retain_graph=True, create_graph=True)
-        grad_theta = torch.autograd.grad(loss_theta, self.model.parameters(), retain_graph=True, create_graph=True)
-        grad_ode = torch.autograd.grad(loss_ode, self.model.parameters(), retain_graph=True, create_graph=True)
-
-        grad_norm_res = torch.norm(torch.cat([g.flatten() for g in grad_res]))
-        grad_norm_theta = torch.norm(torch.cat([g.flatten() for g in grad_theta]))
-        grad_norm_ode = torch.norm(torch.cat([g.flatten() for g in grad_ode]))
-        
-        mean_grad = (grad_norm_res + grad_norm_theta + grad_norm_ode) / 3
-
-        constant_res = mean_grad / (grad_norm_res + 1e-8)
-        constant_theta = mean_grad / (grad_norm_theta + 1e-8)
-        constant_ode = mean_grad / (grad_norm_ode + 1e-8)
-
-        total_loss = constant_res * loss_res + constant_theta * loss_theta + constant_ode * loss_ode
+        total_loss = loss_res + loss_ode 
 
         wandb.log({"loss_res": loss_res})
-        wandb.log({"loss_theta":loss_theta})
         wandb.log({"loss_ode": loss_ode})
-        wandb.log({"loss_res_chunk":  constant_res * loss_res})
-        wandb.log({"loss_theta_chunk": constant_theta * loss_theta})
-        wandb.log({"loss_ode_chunk": constant_ode * loss_ode})
-    """
+        # wandb.log({"loss_ode_chunk": self.adaptive_constant_ode * loss_ode})
     
-# for compute_adaptive_constant. battery paper, for even training, oscillates for ode loss,
-    """
-        self._compute_adaptive_constant(loss_res, loss_ode, loss_theta, self.model)
-        total_loss = loss_res + self.adaptive_constant_theta * loss_theta + self.adaptive_constant_ode * loss_ode
-        wandb.log({"loss_res": loss_res})
-        wandb.log({"loss_theta":loss_theta})
-        wandb.log({"loss_ode": loss_ode})
-        wandb.log({"loss_res_chunk":  loss_res})
-        wandb.log({"loss_theta_chunk": self.adaptive_constant_theta * loss_theta})
-        wandb.log({"loss_ode_chunk": self.adaptive_constant_ode * loss_ode})
-    """
-
-# for heuristic based testing, 5 for theta currently the best, theta prediction compulsory for correct 
-    """
-        # total_loss = loss_res + 5 * loss_theta + loss_ode
-        wandb.log({"loss_res": loss_res})
-        wandb.log({"loss_theta":loss_theta})
-        wandb.log({"loss_ode": loss_ode})
-        wandb.log({"loss_res_chunk":  loss_res})
-        wandb.log({"loss_theta_chunk": 5 * loss_theta})
-        wandb.log({"loss_ode_chunk": loss_ode})
-    """
+        return total_loss

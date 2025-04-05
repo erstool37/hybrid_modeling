@@ -1,0 +1,139 @@
+import torch
+import torch.nn as nn
+from torchvision import models
+import datetime
+import cv2
+import wandb
+import argparse
+import numpy as np
+import os.path as osp
+import glob
+import torch.optim as optim
+from tqdm import tqdm
+from statistics import mean
+import importlib
+import yaml
+import json
+from torch.utils.data import TensorDataset, DataLoader, Dataset, Subset
+from sklearn.model_selection import train_test_split
+from utils.utils import MAPEcalculator
+
+parser = argparse.ArgumentParser()
+parser.add_argument("-c", "--config", type=str, required=True, default="configs/config.yaml")
+args = parser.parse_args()
+
+with open("config.yaml", "r") as file:
+    config = yaml.safe_load(file)
+    
+NAME = config["name"]
+PROJECT = config["project"]
+VER = config["version"]
+BATCH_SIZE = int(config["train_settings"]["batch_size"])
+NUM_EPOCHS = int(config["train_settings"]["NUM_EPOCHS"])
+NUM_WORKERS = int(config["train_settings"]["num_workers"])
+SCALER = config["preprocess"]["scaler"]
+DESCALER = config["preprocess"]["descaler"]
+TEST_SIZE = float(config["preprocess"]["test_size"])
+RANDOM_STATE = int(config["preprocess"]["random_state"])
+SEQ_LEN = int(config["preprocess"]["sequence_length"])
+TIME_STEP = int(config["model"]["time_step"])
+DATALOADER = config["model"]["dataloader"]
+MODEL = config["model"]["model_class"]
+HIDDEN_DIM = int(config["model"]["lstm_size"])
+NUM_LAYERS = int(config["model"]["lstm_layers"])
+OUTPUT_SIZE = int(config["model"]["output_size"])
+RATE = float(config["model"]["drop_rate"])
+LOSS = config["model"]["loss"]
+W_RES = float(config["model"]["w_res"])
+W_THETA = float(config["model"]["w_theta"])
+W_ODE = float(config["model"]["w_ode"])
+OPTIMIZER = config["optimizer"]["optim_class"]
+SCHEDULER = config["optimizer"]["scheduler_class"]
+LR = float(config["optimizer"]["lr"])
+ETA_MIN = float(config["optimizer"]["eta_min"])
+W_DECAY = float(config["optimizer"]["weight_decay"])
+PATIENCE = int(config["optimizer"]["patience"])
+CHECKPOINT = config["directories"]["checkpoint"]
+PARA_DIR = config["directories"]["data_root"]
+
+data_module = importlib.import_module(f"datasets.{DATALOADER}")
+model_module = importlib.import_module(f"models.{MODEL}")
+loss_module = importlib.import_module(f"losses.{LOSS}")
+
+data_class = getattr(data_module, DATALOADER)
+model_class = getattr(model_module, MODEL)
+criterion_class = getattr(loss_module, LOSS)
+optim_class = getattr(optim, OPTIMIZER)
+scheduler_class = getattr(optim.lr_scheduler, SCHEDULER)
+
+today = datetime.datetime.now().strftime("%m%d")
+checkpoint = f"{CHECKPOINT}{today}_{VER}.pth"
+ckpt_name = osp.basename(checkpoint).split(".")[0]
+run_name = f"{NAME}_{ckpt_name}"
+
+wandb.init(project=PROJECT, name=run_name, reinit=True, resume="never", config= config)
+
+# DATASET
+train_ds = data_class(dir = PARA_DIR, sequence_length = SEQ_LEN, method = 'train')
+val_ds = data_class(dir = PARA_DIR, sequence_length = SEQ_LEN, method = 'train')
+
+indices = np.arange(len(train_ds))
+train_idx, val_idx = train_test_split(indices, test_size=TEST_SIZE, shuffle=False)
+
+train_ds = Subset(train_ds, train_idx)
+val_ds = Subset(val_ds, val_idx)
+
+train_dl = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS)
+val_dl = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
+
+# INITIALIZE
+device = "cuda" if torch.cuda.is_available() else "cpu"
+model = model_class(input_size=7, hidden_dim=HIDDEN_DIM, num_layers=NUM_LAYERS, output_size=6).to(device)
+criterion = criterion_class(time_step=TIME_STEP, w_res=W_RES, w_theta=W_THETA, w_ode=W_ODE, descaler=DESCALER)
+optimizer = optim_class(model.parameters(), lr=LR, weight_decay=W_DECAY)
+scheduler = scheduler_class(optimizer, T_max=NUM_EPOCHS, eta_min=ETA_MIN)
+
+# TRAINING
+wandb.watch(model, criterion, log="all", log_freq=5)
+
+for epoch in range(NUM_EPOCHS):
+    model.train()
+    train_losses = []
+    print(f"Epoch {epoch+1}/{NUM_EPOCHS} - Training ")
+    for model_input, target in tqdm(train_dl): 
+        model_input, target = model_input.to(device), target.to(device)
+
+        outputs = model(model_input)
+        train_loss = criterion(model_input, outputs, target)
+        train_losses.append(train_loss.item())
+        optimizer.zero_grad()
+        train_loss.backward()
+        optimizer.step()
+
+        # loss print
+        if (len(train_losses)) % 20 == 0:
+            mean_train_loss = mean(train_losses)
+            wandb.log({"train_loss": mean_train_loss})
+    train_losses.clear()
+
+    model.eval()
+    val_losses = []
+    with torch.no_grad():
+        print(f"Epoch {epoch+1}/{NUM_EPOCHS} - Validation")
+    for model_input, target in tqdm(val_dl):
+        model_input, target  = model_input.to(device), target.to(device)
+        outputs = model(model_input)
+        val_loss = criterion(model_input, outputs, target)
+        val_losses.append(val_loss.item())
+        MAPEcalculator(outputs.detach(), target.detach(), DESCALER, "val")
+
+    mean_val_loss = mean(val_losses)
+    wandb.log({"val_loss": mean_val_loss})
+
+    scheduler.step()
+    current_lr = scheduler.get_last_lr()[0]
+
+    print(f"Epoch {epoch+1}/{NUM_EPOCHS} results - Train Loss: {mean_train_loss:.4f} Validation Loss: {mean_val_loss:.4f} - LR: {current_lr:.8f}")
+wandb.finish()
+
+torch.save(model.state_dict(), f"{CHECKPOINT}{today}_{VER}.pth",)

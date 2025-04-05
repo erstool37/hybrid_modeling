@@ -1,0 +1,1 @@
+# vessl storage copy-file . volume://vessl-storage/stir-data

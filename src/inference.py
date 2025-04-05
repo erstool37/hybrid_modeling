@@ -1,15 +1,15 @@
 import torch
 from src.models.PINN import PINN
 from src.models.lstmPINN import lstmPINN
-from src.losses.PINNLoss import PINNLoss as L
-from src.utils.Paraloader import Paraloader
+from losses.timeODE import PINNLoss as L
+from datasets.Parameterloader import Paraloader
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Subset, DataLoader
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.io import loadmat
-from src.utils.Paraloader import Paraloader as P
+from datasets.Parameterloader import Paraloader as P
 
 PARA_DIR = "dataset/dataset.csv"
 STATS_DIR = "dataset/statistics_total.csv"
