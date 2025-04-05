@@ -51,8 +51,6 @@ class ODE(nn.Module):
         p_pred, h_ref_out_pred = model_output[:, :2].T.unsqueeze(-1) # x(t+1)
         zeta, gamma, eps_tp, eps_sh = target[:, 2:].T.unsqueeze(-1) # p(t)
 
-        
-
         p_input_un = self.descaler(p_input, "pressure", "total")
         h_ref_out_input_un = self.descaler(h_ref_out_input, "h_ref_out", "total")
         m_ref_in_un = self.descaler(m_ref_in, "m_ref_in", "total")

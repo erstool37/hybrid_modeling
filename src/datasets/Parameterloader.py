@@ -18,14 +18,13 @@ class Parameterloader(Dataset):
         self.sequence_length = sequence_length # exists for lstmPINN
         self.ds = pd.read_csv(dir)
         self.method = method
-        self.scaler = scaler
 
         # normalize the dataset
         utils = importlib.import_module("utils")
-        scaler = getattr(utils, scaler)
+        self.scaler = getattr(utils, scaler)
 
         for item in self.ds.columns: 
-            self.ds[item] = scaler(torch.tensor(self.ds[item].values), item, self.method)
+            self.ds[item] = self.scaler(torch.tensor(self.ds[item].values), item, self.method)
 
         state = self.ds[['pressure', 'h_ref_out']].astype(float).values
         input = self.ds[['m_ref_in', 'm_ref_out', 'h_ref_in', 'm_cool', 'T_cool_in']].astype(float).values

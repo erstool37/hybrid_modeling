@@ -1,8 +1,6 @@
 import torch
 import torch.nn as nn
-from torchvision import models
 import datetime
-import cv2
 import wandb
 import argparse
 import numpy as np
@@ -22,28 +20,29 @@ parser = argparse.ArgumentParser()
 parser.add_argument("-c", "--config", type=str, required=True, default="configs/config.yaml")
 args = parser.parse_args()
 
-with open("config.yaml", "r") as file:
+with open("configs/config.yaml", "r") as file:
     config = yaml.safe_load(file)
     
 NAME = config["name"]
 PROJECT = config["project"]
 VER = config["version"]
 BATCH_SIZE = int(config["train_settings"]["batch_size"])
-NUM_EPOCHS = int(config["train_settings"]["NUM_EPOCHS"])
+NUM_EPOCHS = int(config["train_settings"]["num_epochs"])
 NUM_WORKERS = int(config["train_settings"]["num_workers"])
+PIN_MEMORY = config["train_settings"]["pin_memory"]
 SCALER = config["preprocess"]["scaler"]
 DESCALER = config["preprocess"]["descaler"]
 TEST_SIZE = float(config["preprocess"]["test_size"])
 RANDOM_STATE = int(config["preprocess"]["random_state"])
 SEQ_LEN = int(config["preprocess"]["sequence_length"])
-TIME_STEP = int(config["model"]["time_step"])
+TIME_STEP = int(config["preprocess"]["time_step"])
 DATALOADER = config["model"]["dataloader"]
 MODEL = config["model"]["model_class"]
 HIDDEN_DIM = int(config["model"]["lstm_size"])
 NUM_LAYERS = int(config["model"]["lstm_layers"])
 OUTPUT_SIZE = int(config["model"]["output_size"])
 RATE = float(config["model"]["drop_rate"])
-LOSS = config["model"]["loss"]
+LOSS = config["loss"]
 W_RES = float(config["model"]["w_res"])
 W_THETA = float(config["model"]["w_theta"])
 W_ODE = float(config["model"]["w_ode"])
@@ -74,8 +73,8 @@ run_name = f"{NAME}_{ckpt_name}"
 wandb.init(project=PROJECT, name=run_name, reinit=True, resume="never", config= config)
 
 # DATASET
-train_ds = data_class(dir = PARA_DIR, sequence_length = SEQ_LEN, method = 'train')
-val_ds = data_class(dir = PARA_DIR, sequence_length = SEQ_LEN, method = 'train')
+train_ds = data_class(dir = PARA_DIR, sequence_length = SEQ_LEN, method = 'train', scaler=SCALER)
+val_ds = data_class(dir = PARA_DIR, sequence_length = SEQ_LEN, method = 'train', scaler=SCALER)
 
 indices = np.arange(len(train_ds))
 train_idx, val_idx = train_test_split(indices, test_size=TEST_SIZE, shuffle=False)
@@ -83,8 +82,8 @@ train_idx, val_idx = train_test_split(indices, test_size=TEST_SIZE, shuffle=Fals
 train_ds = Subset(train_ds, train_idx)
 val_ds = Subset(val_ds, val_idx)
 
-train_dl = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS)
-val_dl = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
+train_dl = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, pin_memory=PIN_MEMORY)
+val_dl = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS, pin_memory=PIN_MEMORY)
 
 # INITIALIZE
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -95,7 +94,8 @@ scheduler = scheduler_class(optimizer, T_max=NUM_EPOCHS, eta_min=ETA_MIN)
 
 # TRAINING
 wandb.watch(model, criterion, log="all", log_freq=5)
-
+best_val_loss = float("inf")
+counter = 0
 for epoch in range(NUM_EPOCHS):
     model.train()
     train_losses = []
@@ -111,7 +111,7 @@ for epoch in range(NUM_EPOCHS):
         optimizer.step()
 
         # loss print
-        if (len(train_losses)) % 20 == 0:
+        if (len(train_losses)) % 2 == 0:
             mean_train_loss = mean(train_losses)
             wandb.log({"train_loss": mean_train_loss})
     train_losses.clear()
@@ -120,15 +120,24 @@ for epoch in range(NUM_EPOCHS):
     val_losses = []
     with torch.no_grad():
         print(f"Epoch {epoch+1}/{NUM_EPOCHS} - Validation")
-    for model_input, target in tqdm(val_dl):
-        model_input, target  = model_input.to(device), target.to(device)
-        outputs = model(model_input)
-        val_loss = criterion(model_input, outputs, target)
-        val_losses.append(val_loss.item())
-        MAPEcalculator(outputs.detach(), target.detach(), DESCALER, "val")
+        for model_input, target in tqdm(val_dl):
+            model_input, target  = model_input.to(device), target.to(device)
+            outputs = model(model_input)
+            val_loss = criterion(model_input, outputs, target)
+            val_losses.append(val_loss.item())
+            MAPEcalculator(outputs.detach(), target.detach(), DESCALER, "val")
 
-    mean_val_loss = mean(val_losses)
-    wandb.log({"val_loss": mean_val_loss})
+        mean_val_loss = mean(val_losses)
+        wandb.log({"val_loss": mean_val_loss})
+
+        if mean_val_loss < best_val_loss:
+            best_val_loss = mean_val_loss
+            counter = 0
+        else:
+            counter += 1
+            if counter >= PATIENCE:
+                print(f"Early stopping at epoch {epoch+1}")
+                break
 
     scheduler.step()
     current_lr = scheduler.get_last_lr()[0]
@@ -136,4 +145,4 @@ for epoch in range(NUM_EPOCHS):
     print(f"Epoch {epoch+1}/{NUM_EPOCHS} results - Train Loss: {mean_train_loss:.4f} Validation Loss: {mean_val_loss:.4f} - LR: {current_lr:.8f}")
 wandb.finish()
 
-torch.save(model.state_dict(), f"{CHECKPOINT}{today}_{VER}.pth",)
+torch.save(model.state_dict(), f"{CHECKPOINT}{today}_{VER}.pth")
