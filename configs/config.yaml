@@ -43,3 +43,14 @@ directories:
   data_root : "dataset/dataset.csv"
   test_root : "dataset/test.csv"
   inf_root : "src/inference"
+
+
+optimization : 
+  
+  num_workers : 16
+  pin_memory : False
+  batch_size : 4096
+  num_epochs : 30
+  seed : 37
+  test_size : 0.2
+  random_state : 37
