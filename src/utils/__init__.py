@@ -5,5 +5,9 @@ from .utils import (
     normalize,
     unnormalize,
     gradunscaler,
-    MAPEcalculator
+    MAPEcalculator,
+    MAPEtestcalculator,
+    inference
 )
+
+from .setseed import setseed

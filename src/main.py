@@ -14,7 +14,7 @@ import yaml
 import json
 from torch.utils.data import TensorDataset, DataLoader, Dataset, Subset
 from sklearn.model_selection import train_test_split
-from utils.utils import MAPEcalculator
+from utils import MAPEcalculator, MAPEtestcalculator, setseed, inference
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-c", "--config", type=str, required=True, default="configs/config.yaml")
@@ -29,6 +29,7 @@ VER = config["version"]
 BATCH_SIZE = int(config["train_settings"]["batch_size"])
 NUM_EPOCHS = int(config["train_settings"]["num_epochs"])
 NUM_WORKERS = int(config["train_settings"]["num_workers"])
+SEED = int(config["train_settings"]["seed"])
 PIN_MEMORY = config["train_settings"]["pin_memory"]
 SCALER = config["preprocess"]["scaler"]
 DESCALER = config["preprocess"]["descaler"]
@@ -54,6 +55,10 @@ W_DECAY = float(config["optimizer"]["weight_decay"])
 PATIENCE = int(config["optimizer"]["patience"])
 CHECKPOINT = config["directories"]["checkpoint"]
 PARA_DIR = config["directories"]["data_root"]
+TEST_DIR = config["directories"]["test_root"]
+INF_DIR = config["directories"]["inf_root"]
+
+setseed(SEED)
 
 data_module = importlib.import_module(f"datasets.{DATALOADER}")
 model_module = importlib.import_module(f"models.{MODEL}")
@@ -66,15 +71,16 @@ optim_class = getattr(optim, OPTIMIZER)
 scheduler_class = getattr(optim.lr_scheduler, SCHEDULER)
 
 today = datetime.datetime.now().strftime("%m%d")
-checkpoint = f"{CHECKPOINT}{today}_{VER}.pth"
-ckpt_name = osp.basename(checkpoint).split(".")[0]
-run_name = f"{NAME}_{ckpt_name}"
+checkpoint = f"{CHECKPOINT}{NAME}_{today}_{VER}.pth"
+run_name = osp.basename(checkpoint).split(".")[0]
 
 wandb.init(project=PROJECT, name=run_name, reinit=True, resume="never", config= config)
 
 # DATASET
+"""
 train_ds = data_class(dir = PARA_DIR, sequence_length = SEQ_LEN, method = 'train', scaler=SCALER)
 val_ds = data_class(dir = PARA_DIR, sequence_length = SEQ_LEN, method = 'train', scaler=SCALER)
+test_ds = data_class(dir = TEST_DIR, sequence_length = SEQ_LEN, method = 'test', scaler=SCALER)
 
 indices = np.arange(len(train_ds))
 train_idx, val_idx = train_test_split(indices, test_size=TEST_SIZE, shuffle=False)
@@ -84,6 +90,10 @@ val_ds = Subset(val_ds, val_idx)
 
 train_dl = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, pin_memory=PIN_MEMORY)
 val_dl = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS, pin_memory=PIN_MEMORY)
+test_dl = DataLoader(test_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS, pin_memory=PIN_MEMORY)
+"""
+test_ds = data_class(dir = TEST_DIR, sequence_length = SEQ_LEN, method = 'test', scaler=SCALER)
+test_dl = DataLoader(test_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS, pin_memory=PIN_MEMORY)
 
 # INITIALIZE
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -91,7 +101,7 @@ model = model_class(input_size=7, hidden_dim=HIDDEN_DIM, num_layers=NUM_LAYERS, 
 criterion = criterion_class(time_step=TIME_STEP, w_res=W_RES, w_theta=W_THETA, w_ode=W_ODE, descaler=DESCALER)
 optimizer = optim_class(model.parameters(), lr=LR, weight_decay=W_DECAY)
 scheduler = scheduler_class(optimizer, T_max=NUM_EPOCHS, eta_min=ETA_MIN)
-
+"""
 # TRAINING
 wandb.watch(model, criterion, log="all", log_freq=5)
 best_val_loss = float("inf")
@@ -146,3 +156,28 @@ for epoch in range(NUM_EPOCHS):
 wandb.finish()
 
 torch.save(model.state_dict(), f"{CHECKPOINT}{today}_{VER}.pth")
+"""
+
+# Inference
+checkpoint = "src/weights/PINN0324_07.pth"
+model.load_state_dict(torch.load(checkpoint, map_location=device))
+model.eval()
+
+# Inference loop
+pred, targets, errors = [], [], []
+with torch.no_grad():
+    for model_input, target in tqdm(test_dl):
+        model_input, target = model_input.to(device), target.to(device)
+        output = model(model_input)
+        error = MAPEtestcalculator(output.detach(), target.detach(), DESCALER, "test")
+
+        errors.append(error)    
+        pred.append(output)
+        targets.append(target)
+
+errors = torch.cat(errors, dim=0)
+pred = torch.cat(pred, dim=0)
+targets = torch.cat(targets, dim=0)
+keys = ["pressure", "enthalpy", "zeta"]
+
+inference(pred, targets, errors, DESCALER, "test", INF_DIR)    

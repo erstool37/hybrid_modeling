@@ -3,6 +3,7 @@ import torch
 from importlib.resources import files
 import importlib
 import wandb
+import matplotlib.pyplot as plt
 
 # Load stats
 def load_stats(method):
@@ -63,3 +64,54 @@ def MAPEcalculator(pred, target, descaler, method):
     wandb.log({f"MAPE {method} pressure %" : loss_mape_p * 100})
     wandb.log({f"MAPE {method} enthalpy %" : loss_mape_h * 100})
     wandb.log({f"MAPE {method} zeta %" : loss_mape_z * 100})
+
+def MAPEtestcalculator(pred, target, descaler, method):
+    utils = importlib.import_module("utils")
+    descaler = getattr(utils, descaler)
+    
+    pred_p = descaler(pred[:,0], "pressure", method).unsqueeze(-1)
+    pred_h = descaler(pred[:,1], "h_ref_out", method).unsqueeze(-1)
+    pred_z = descaler(pred[:,2], "z_tpsh", method).unsqueeze(-1)
+
+    target_p = descaler(target[:,0], "pressure", method).unsqueeze(-1)
+    target_h = descaler(target[:,1], "h_ref_out", method).unsqueeze(-1)
+    target_z = descaler(target[:,2], "z_tpsh", method).unsqueeze(-1)
+
+    loss_mape_p = torch.abs(pred_p - target_p) / target_p * 100
+    loss_mape_h = torch.abs(pred_h - target_h) / target_h * 100
+    loss_mape_z = torch.abs(pred_z - target_z) / target_z * 100
+
+    errors = torch.cat((loss_mape_p, loss_mape_h, loss_mape_z), dim=1)
+
+    return errors
+
+def inference(pred, target, errors, descaler, method, save_dir):
+    utils = importlib.import_module("utils")
+    descaler = getattr(utils, descaler)
+
+    keys = ["pressure", "h_ref_out", "z_tpsh"]
+
+    pred_p = descaler(pred[:,0], "pressure", method).unsqueeze(-1)
+    pred_h = descaler(pred[:,1], "h_ref_out", method).unsqueeze(-1)
+    pred_z = descaler(pred[:,2], "z_tpsh", method).unsqueeze(-1)
+    
+    target_p = descaler(target[:,0], "pressure", method).unsqueeze(-1)
+    target_h = descaler(target[:,1], "h_ref_out", method).unsqueeze(-1)
+    target_z = descaler(target[:,2], "z_tpsh", method).unsqueeze(-1)
+
+    pred = torch.cat((pred_p, pred_h, pred_z), dim=1).transpose(0,1).cpu()
+    target = torch.cat((target_p, target_h, target_z), dim=1).transpose(0,1).cpu()
+    errors = errors.transpose(0,1).cpu()
+
+    for pred, target, error, key in zip(pred, target, errors, keys):    
+        print(f"Error {key}: {float(error.mean()):.2f}%")
+
+        plt.figure(figsize=(10, 5))
+        plt.plot(pred, label=f"Predicted_{key}", linestyle='--')
+        plt.plot(target, label=f"True_{key}", linestyle='-')
+        plt.title(f"Predicted vs True {key}")
+        plt.xlabel("Time")
+        plt.ylabel(f"{key}")
+        plt.legend()
+        plt.grid()
+        plt.savefig(f'{save_dir}/prediction_{key}.png', dpi=300, bbox_inches='tight')

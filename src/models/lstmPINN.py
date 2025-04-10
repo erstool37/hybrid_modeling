@@ -8,9 +8,13 @@ class lstmPINN(nn.Module):
     def __init__(self, input_size, hidden_dim, num_layers, output_size):
         super(lstmPINN, self).__init__()
         self.lstm = nn.LSTM(input_size, hidden_dim, num_layers)
-        self.fc2 = nn.Linear(hidden_dim, hidden_dim)  
         self.activation = nn.ReLU()                
-        self.fc = nn.Linear(hidden_dim, output_size)    
+        self.fc = nn.Linear(hidden_dim, output_size)     
+        # self.fc = nn.Sequential(
+        #     nn.Linear(hidden_dim, hidden_dim),
+        #     nn.ReLU(),
+        #     nn.Linear(hidden_dim, output_size)
+        # )
 
     def forward(self, x):
         # Disable cuDNN autotuner for deterministic LSTM behavior
@@ -18,8 +22,7 @@ class lstmPINN(nn.Module):
             output, _ = self.lstm(x[:, :, :7])
 
         output = output[:, -1, :]
-        x = self.fc2(output)      
-        x = self.activation(x)   
-        x = self.fc(x)            
+        x = self.activation(output)
+        x = self.fc(x)    
         
         return x

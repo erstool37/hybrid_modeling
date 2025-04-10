@@ -1,15 +1,15 @@
 import pandas as pd
 
 dir = "dataset/dataset.csv"
-# test_dir = "dataset/test.csv"
+test_dir = "dataset/test.csv"
 
 save_dir_train = "src/utils/stats/train.csv"
 save_dir_val = "src/utils/stats/val.csv"
 save_dir_total = "src/utils/stats/total.csv"
-# save_dir_test = "src/utils/stats/test.csv"
+save_dir_test = "src/utils/stats/test.csv"
 
 ds = pd.read_csv(dir)
-# ds_test = ds = pd.read_csv(test_dir)
+ds_test = ds = pd.read_csv(test_dir)
 
 # train stats
 train_size = int(len(ds) * 0.8)
@@ -29,6 +29,6 @@ stats = pd.DataFrame({'mean': ds_total.mean(), 'std': ds_total.std(), 'max': ds_
 stats.to_csv(save_dir_total, index=True)
 
 # test stats
-# ds_test = ds_test.iloc[:]
-# stats = pd.DataFrame({'mean': ds_test.mean(), 'std': ds_test.std(), 'max': ds_test.max(), 'min': ds_test.min()}).T
-# stats.to_csv(save_dir_test, index=True)
+ds_test = ds_test.iloc[:]
+stats = pd.DataFrame({'mean': ds_test.mean(), 'std': ds_test.std(), 'max': ds_test.max(), 'min': ds_test.min()}).T
+stats.to_csv(save_dir_test, index=True)
