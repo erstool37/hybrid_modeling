@@ -4,6 +4,7 @@ from importlib.resources import files
 import importlib
 import wandb
 import matplotlib.pyplot as plt
+import json
 
 # Load stats
 def load_stats(method):
@@ -85,7 +86,7 @@ def MAPEtestcalculator(pred, target, descaler, method):
 
     return errors
 
-def inference(pred, target, errors, descaler, method, save_dir):
+def inference(pred, target, errors, descaler, method, save_dir, run_name):
     utils = importlib.import_module("utils")
     descaler = getattr(utils, descaler)
 
@@ -103,8 +104,9 @@ def inference(pred, target, errors, descaler, method, save_dir):
     target = torch.cat((target_p, target_h, target_z), dim=1).transpose(0,1).cpu()
     errors = errors.transpose(0,1).cpu()
 
-    for pred, target, error, key in zip(pred, target, errors, keys):    
-        print(f"Error {key}: {float(error.mean()):.2f}%")
+    mape = {}
+    for pred, target, error, key in zip(pred, target, errors, keys):
+        mape[key] = f"{float(error.mean()):.2f}%"
 
         plt.figure(figsize=(10, 5))
         plt.plot(pred, label=f"Predicted_{key}", linestyle='--')
@@ -114,4 +116,7 @@ def inference(pred, target, errors, descaler, method, save_dir):
         plt.ylabel(f"{key}")
         plt.legend()
         plt.grid()
-        plt.savefig(f'{save_dir}/prediction_{key}.png', dpi=300, bbox_inches='tight')
+        plt.savefig(f'{save_dir}/{run_name}_{key}.png', dpi=300, bbox_inches='tight')
+        
+    with open(f"{save_dir}/{run_name}.json", "w") as f:
+            json.dump(mape, f, indent=2)

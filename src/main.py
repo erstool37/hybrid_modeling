@@ -71,8 +71,8 @@ optim_class = getattr(optim, OPTIMIZER)
 scheduler_class = getattr(optim.lr_scheduler, SCHEDULER)
 
 today = datetime.datetime.now().strftime("%m%d")
-checkpoint = f"{CHECKPOINT}{NAME}_{today}_{VER}.pth"
-run_name = osp.basename(checkpoint).split(".")[0]
+run_name = f"{NAME}_{today}_{VER}"
+checkpoint = f"{CHECKPOINT}{run_name}.pth"
 
 wandb.init(project=PROJECT, name=run_name, reinit=True, resume="never", config= config)
 
@@ -101,8 +101,9 @@ model = model_class(input_size=7, hidden_dim=HIDDEN_DIM, num_layers=NUM_LAYERS, 
 criterion = criterion_class(time_step=TIME_STEP, w_res=W_RES, w_theta=W_THETA, w_ode=W_ODE, descaler=DESCALER)
 optimizer = optim_class(model.parameters(), lr=LR, weight_decay=W_DECAY)
 scheduler = scheduler_class(optimizer, T_max=NUM_EPOCHS, eta_min=ETA_MIN)
-"""
+
 # TRAINING
+"""
 wandb.watch(model, criterion, log="all", log_freq=5)
 best_val_loss = float("inf")
 counter = 0
@@ -155,7 +156,7 @@ for epoch in range(NUM_EPOCHS):
     print(f"Epoch {epoch+1}/{NUM_EPOCHS} results - Train Loss: {mean_train_loss:.4f} Validation Loss: {mean_val_loss:.4f} - LR: {current_lr:.8f}")
 wandb.finish()
 
-torch.save(model.state_dict(), f"{CHECKPOINT}{today}_{VER}.pth")
+torch.save(model.state_dict(), checkpoint)
 """
 
 # Inference
@@ -180,4 +181,4 @@ pred = torch.cat(pred, dim=0)
 targets = torch.cat(targets, dim=0)
 keys = ["pressure", "enthalpy", "zeta"]
 
-inference(pred, targets, errors, DESCALER, "test", INF_DIR)    
+inference(pred, targets, errors, DESCALER, "test", INF_DIR, run_name)    

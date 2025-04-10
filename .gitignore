@@ -3,4 +3,4 @@ dataset/optimized
 dataset/raw
 wandb/
 **/__pycache__/
-src/inference/*.png
+src/inference/*
