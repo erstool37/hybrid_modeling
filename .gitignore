@@ -4,3 +4,4 @@ dataset/raw
 wandb/
 **/__pycache__/
 src/inference/*
+src/weights/*

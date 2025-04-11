@@ -20,7 +20,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("-c", "--config", type=str, required=True, default="configs/config.yaml")
 args = parser.parse_args()
 
-with open("configs/config.yaml", "r") as file:
+with open(args.config, "r") as file:
     config = yaml.safe_load(file)
     
 NAME = config["name"]
@@ -77,22 +77,22 @@ checkpoint = f"{CHECKPOINT}{run_name}.pth"
 wandb.init(project=PROJECT, name=run_name, reinit=True, resume="never", config= config)
 
 # DATASET
-"""
 train_ds = data_class(dir = PARA_DIR, sequence_length = SEQ_LEN, method = 'train', scaler=SCALER)
 val_ds = data_class(dir = PARA_DIR, sequence_length = SEQ_LEN, method = 'train', scaler=SCALER)
 test_ds = data_class(dir = TEST_DIR, sequence_length = SEQ_LEN, method = 'test', scaler=SCALER)
 
 indices = np.arange(len(train_ds))
+indices2 = np.arange(len(test_ds))
+
 train_idx, val_idx = train_test_split(indices, test_size=TEST_SIZE, shuffle=False)
+dummy_idx, test_idx = train_test_split(indices2, test_size=0.1, shuffle=False)
 
 train_ds = Subset(train_ds, train_idx)
 val_ds = Subset(val_ds, val_idx)
+test_ds = Subset(test_ds, test_idx)
 
-train_dl = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, pin_memory=PIN_MEMORY)
+train_dl = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS, pin_memory=PIN_MEMORY)
 val_dl = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS, pin_memory=PIN_MEMORY)
-test_dl = DataLoader(test_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS, pin_memory=PIN_MEMORY)
-"""
-test_ds = data_class(dir = TEST_DIR, sequence_length = SEQ_LEN, method = 'test', scaler=SCALER)
 test_dl = DataLoader(test_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS, pin_memory=PIN_MEMORY)
 
 # INITIALIZE
@@ -103,7 +103,6 @@ optimizer = optim_class(model.parameters(), lr=LR, weight_decay=W_DECAY)
 scheduler = scheduler_class(optimizer, T_max=NUM_EPOCHS, eta_min=ETA_MIN)
 
 # TRAINING
-"""
 wandb.watch(model, criterion, log="all", log_freq=5)
 best_val_loss = float("inf")
 counter = 0
@@ -115,6 +114,7 @@ for epoch in range(NUM_EPOCHS):
         model_input, target = model_input.to(device), target.to(device)
 
         outputs = model(model_input)
+        
         train_loss = criterion(model_input, outputs, target)
         train_losses.append(train_loss.item())
         optimizer.zero_grad()
@@ -149,18 +149,15 @@ for epoch in range(NUM_EPOCHS):
             if counter >= PATIENCE:
                 print(f"Early stopping at epoch {epoch+1}")
                 break
-
     scheduler.step()
     current_lr = scheduler.get_last_lr()[0]
 
     print(f"Epoch {epoch+1}/{NUM_EPOCHS} results - Train Loss: {mean_train_loss:.4f} Validation Loss: {mean_val_loss:.4f} - LR: {current_lr:.8f}")
 wandb.finish()
-
 torch.save(model.state_dict(), checkpoint)
-"""
 
 # Inference
-checkpoint = "src/weights/PINN0324_07.pth"
+# checkpoint = "src/weights/PINN0324_07.pth"
 model.load_state_dict(torch.load(checkpoint, map_location=device))
 model.eval()
 
@@ -170,8 +167,8 @@ with torch.no_grad():
     for model_input, target in tqdm(test_dl):
         model_input, target = model_input.to(device), target.to(device)
         output = model(model_input)
-        error = MAPEtestcalculator(output.detach(), target.detach(), DESCALER, "test")
 
+        error = MAPEtestcalculator(output.detach(), target.detach(), DESCALER, "test")
         errors.append(error)    
         pred.append(output)
         targets.append(target)
@@ -181,4 +178,4 @@ pred = torch.cat(pred, dim=0)
 targets = torch.cat(targets, dim=0)
 keys = ["pressure", "enthalpy", "zeta"]
 
-inference(pred, targets, errors, DESCALER, "test", INF_DIR, run_name)    
+inference(pred, targets, errors, DESCALER, "test", INF_DIR, run_name)

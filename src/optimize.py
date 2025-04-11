@@ -24,19 +24,11 @@ with open("configs/config.yaml", "r") as file:
     config = yaml.safe_load(file)
 
 
-
 # Assume trained_model is already loaded and frozen
 trained_model.eval()
 for param in trained_model.parameters():
     param.requires_grad = False
 
-# Input: current state
-x_t = torch.tensor([1.0], requires_grad=False)  # shape depends on your model
-
-# Initialize u_t as a parameter to optimize
-u_t = torch.tensor([0.0], requires_grad=True)
-
-# Define optimizer
 optimizer = torch.optim.Adam([u_t], lr=0.01)
 
 # Define objective function

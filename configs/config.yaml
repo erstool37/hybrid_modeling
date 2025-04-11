@@ -1,6 +1,6 @@
 project: "heat exchanger"
-name: "test_run"
-version: v0
+name: "total_test_run"
+version: v2
 
 train_settings:
   batch_size : 4096
@@ -11,8 +11,8 @@ train_settings:
   
 preprocess:
   scaler : normalize
-  descaler : zunnormalize
-  sequence_length : 30
+  descaler : unnormalize
+  sequence_length : 10
   time_step : 2
   test_size : 0.2
   random_state : 37
@@ -20,12 +20,12 @@ preprocess:
 model:
   dataloader : Parameterloader
   model_class : lstmPINN
-  lstm_size : 256
-  lstm_layers : 3
+  lstm_size : 512
+  lstm_layers : 4
   output_size : 6
-  drop_rate : 0.2
-  w_res : 1
-  w_theta : 40
+  drop_rate : 0.0
+  w_res : 2
+  w_theta : 30
   w_ode : 1
 
 loss : ODE
@@ -34,19 +34,17 @@ optimizer:
   optim_class: Adam
   scheduler_class: CosineAnnealingLR
   lr: 1e-4
-  eta_min : 1e-5
-  weight_decay: 1e-5
-  patience : 15
+  eta_min : 1e-8
+  weight_decay: 0
+  patience : 5
 
 directories:
-  checkpoint : "src/weights"
+  checkpoint : "src/weights/"
   data_root : "dataset/dataset.csv"
   test_root : "dataset/test.csv"
   inf_root : "src/inference"
 
-
 optimization : 
-  
   num_workers : 16
   pin_memory : False
   batch_size : 4096

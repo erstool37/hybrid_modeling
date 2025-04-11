@@ -109,8 +109,8 @@ def inference(pred, target, errors, descaler, method, save_dir, run_name):
         mape[key] = f"{float(error.mean()):.2f}%"
 
         plt.figure(figsize=(10, 5))
-        plt.plot(pred, label=f"Predicted_{key}", linestyle='--')
-        plt.plot(target, label=f"True_{key}", linestyle='-')
+        plt.plot(pred, label=f"Predicted_{key}", linestyle='-', color='r')
+        plt.plot(target, label=f"True_{key}", linestyle='-', color='b')
         plt.title(f"Predicted vs True {key}")
         plt.xlabel("Time")
         plt.ylabel(f"{key}")
@@ -120,3 +120,12 @@ def inference(pred, target, errors, descaler, method, save_dir, run_name):
         
     with open(f"{save_dir}/{run_name}.json", "w") as f:
             json.dump(mape, f, indent=2)
+
+
+def msle_loss(input, target):
+    input = torch.clamp(input, min=1e-7, max=1e2)
+    target = torch.clamp(target, min=1e-7, max=1e2)
+
+    error = torch.mean((torch.log1p(input) - torch.log1p(target))**2)
+
+    return error

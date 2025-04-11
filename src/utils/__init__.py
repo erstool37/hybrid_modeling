@@ -7,7 +7,8 @@ from .utils import (
     gradunscaler,
     MAPEcalculator,
     MAPEtestcalculator,
-    inference
+    inference,
+    msle_loss
 )
 
 from .setseed import setseed

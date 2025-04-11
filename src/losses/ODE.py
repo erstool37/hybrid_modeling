@@ -8,6 +8,7 @@ from .calculator.sys_evap_1008ver import Evaporator
 from .calculator.prop_ref import Refrigerant 
 from .calculator.prop_cool_evap import Coolant_Evaporator
 import importlib
+from utils import msle_loss
 
 class ODE(nn.Module):
     def __init__(self, w_res, w_theta, w_ode, time_step, descaler):
@@ -78,6 +79,7 @@ class ODE(nn.Module):
         dx_dt = torch.cat((dp_dt, dh_dt), dim=-1).unsqueeze(-1)
 
         loss_ode = torch.bmm(mass, dx_dt) - rhs
+        
         loss_res = F.mse_loss(input=model_output[:, :2], target=target[:, :2])
         loss_theta = F.mse_loss(input=model_output[:, 2:], target=target[:, 2:])
         loss_ode = F.mse_loss(input=loss_ode, target=torch.zeros_like(rhs))
