@@ -42,4 +42,5 @@ wandb==0.19.8
 casadi
 tqdm
 matplotlib
+matlab.engine
 opencv-python-headless
