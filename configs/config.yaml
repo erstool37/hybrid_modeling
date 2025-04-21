@@ -1,3 +1,6 @@
+
+# check if optimizing or PINN training
+
 project: "heat exchanger"
 name: "total_test_run"
 version: v2
@@ -45,10 +48,44 @@ directories:
   inf_root : "src/inference"
 
 optimization : 
-  num_workers : 16
-  pin_memory : False
-  batch_size : 4096
-  num_epochs : 30
-  seed : 37
-  test_size : 0.2
-  random_state : 37
+  project: "eMPC optimization"
+  name: "test_run"
+  version: v0
+
+  optimize settings:
+    num_workers : 16  
+    pin_memory : False
+    seed : 37
+    num : 500
+
+  optimizer:
+    optim_class: Adam
+    scheduler_class: CosineAnnealingLR
+    lr: 1e-4
+    eta_min : 1e-8
+    max_iter : 1000
+    tolerance : 5
+    temperature : 5 # desired temperature of T_cool = T_utils
+
+  model:
+    model_class : lstmPINN
+    dataloader : Realtimeloader
+    lstm_size : 512
+    lstm_layers : 4
+    output_size : 6
+    
+  preprocess:
+    scaler : normalize
+    descaler : unnormalize
+    seq_len : 10
+    time_step : 2
+  
+  directories: 
+    checkpoint : "src/weights/PINN0324_01.pth"
+    data_root : "../../../MATLAB/SIMULINK/optimization"
+
+
+  cost: eMPC
+  
+  
+

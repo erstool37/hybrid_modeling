@@ -46,6 +46,44 @@ def gradunscaler(column, method):
     min_item = torch.tensor(stats.loc[3, column])
     return max_item - min_item
 
+def Xnormalizer(x, scaler, method):
+    utils = importlib.import_module("utils")
+    scaler = getattr(utils, scaler)
+    pressure = scaler(x[0], "pressure", method)
+    h_ref_out = scaler(x[1], "h_ref_out", method)
+    x_norm = torch.cat((pressure, h_ref_out), dim=0)
+    return x_norm
+        
+def Unormalizer(u,scaler,method):
+    utils = importlib.import_module("utils")
+    scaler = getattr(utils, scaler)
+    m_ref_in = scaler(u[0], "m_ref_in", method)
+    m_ref_out = scaler(u[1], "m_ref_out", method)
+    h_ref_in = scaler(u[2], "h_ref_in", method)
+    m_cool = scaler(u[3], "m_cool", method)
+    T_cool = scaler(u[4], "T_cool_in", method)
+    u_norm = torch.cat((m_ref_in, m_ref_out, h_ref_in, m_cool, T_cool), dim=0)
+    return u_norm
+
+def Xdenormalizer(x, descaler, method):
+    utils = importlib.import_module("utils")
+    scaler = getattr(utils, scaler)
+    pressure = descaler(x[0], "pressure", method)
+    h_ref_out = descaler(x[1], "h_ref_out", method)
+    x_denorm = torch.cat((pressure, h_ref_out), dim=0)
+    return x_denorm
+        
+def Udenormalizer(u,descaler,method):
+    utils = importlib.import_module("utils")
+    scaler = getattr(utils, scaler)
+    m_ref_in = descaler(u[0], "m_ref_in", method)
+    m_ref_out = descaler(u[1], "m_ref_out", method)
+    h_ref_in = descaler(u[2], "h_ref_in", method)
+    m_cool = descaler(u[3], "m_cool", method)
+    T_cool = descaler(u[4], "T_cool_in", method)
+    u_denorm = torch.cat((m_ref_in, m_ref_out, h_ref_in, m_cool, T_cool), dim=0)
+    return u_denorm
+
 def MAPEcalculator(pred, target, descaler, method):
     utils = importlib.import_module("utils")
     descaler = getattr(utils, descaler)
