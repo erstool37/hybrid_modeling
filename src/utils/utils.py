@@ -14,73 +14,73 @@ def load_stats(method):
 # z-score normalization
 def znormalize(item, column, method):
     stats = load_stats(method)
-    mean_item = torch.tensor(stats.loc[0, column])
-    std_item = torch.tensor(stats.loc[1, column])
+    mean_item = torch.tensor(stats.loc[0, column], dtype=torch.float32)
+    std_item = torch.tensor(stats.loc[1, column], dtype=torch.float32)
     return (item - mean_item) / std_item
 
 # z-score unnormalization
 def zunnormalize(item, column, method):
     stats = load_stats(method)
-    mean_item = torch.tensor(stats.loc[0, column])
-    std_item = torch.tensor(stats.loc[1, column])
+    mean_item = torch.tensor(stats.loc[0, column], dtype=torch.float32)
+    std_item = torch.tensor(stats.loc[1, column], dtype=torch.float32)
     return item * std_item + mean_item
 
 # min-max normalization
 def normalize(item, column, method):
     stats = load_stats(method)
-    max_item = torch.tensor(stats.loc[2, column])
-    min_item = torch.tensor(stats.loc[3, column])
+    max_item = torch.tensor(stats.loc[2, column], dtype=torch.float32)
+    min_item = torch.tensor(stats.loc[3, column], dtype=torch.float32)
     return (item - min_item) / (max_item - min_item)
 
 # min-max unnormalization
 def unnormalize(item, column, method):
     stats = load_stats(method)
-    max_item = torch.tensor(stats.loc[2, column])
-    min_item = torch.tensor(stats.loc[3, column])
+    max_item = torch.tensor(stats.loc[2, column], dtype=torch.float32)
+    min_item = torch.tensor(stats.loc[3, column], dtype=torch.float32)
     return item * (max_item - min_item) + min_item
 
 # Gradient unscaling for min-max normalized gradients
 def gradunscaler(column, method):
     stats = load_stats(method)
-    max_item = torch.tensor(stats.loc[2, column])
-    min_item = torch.tensor(stats.loc[3, column])
+    max_item = torch.tensor(stats.loc[2, column], dtype=torch.float32)
+    min_item = torch.tensor(stats.loc[3, column], dtype=torch.float32)
     return max_item - min_item
 
 def Xnormalizer(x, scaler, method):
     utils = importlib.import_module("utils")
     scaler = getattr(utils, scaler)
-    pressure = scaler(x[0], "pressure", method)
-    h_ref_out = scaler(x[1], "h_ref_out", method)
+    pressure = scaler(x[0].item(), "pressure", method).unsqueeze(-1)
+    h_ref_out = scaler(x[1].item(), "h_ref_out", method).unsqueeze(-1)
     x_norm = torch.cat((pressure, h_ref_out), dim=0)
     return x_norm
         
 def Unormalizer(u,scaler,method):
     utils = importlib.import_module("utils")
     scaler = getattr(utils, scaler)
-    m_ref_in = scaler(u[0], "m_ref_in", method)
-    m_ref_out = scaler(u[1], "m_ref_out", method)
-    h_ref_in = scaler(u[2], "h_ref_in", method)
-    m_cool = scaler(u[3], "m_cool", method)
-    T_cool = scaler(u[4], "T_cool_in", method)
+    m_ref_in = scaler(u[0].item(), "m_ref_in", method).unsqueeze(-1)
+    m_ref_out = scaler(u[1].item(), "m_ref_out", method).unsqueeze(-1)
+    h_ref_in = scaler(u[2].item(), "h_ref_in", method).unsqueeze(-1)
+    m_cool = scaler(u[3].item(), "m_cool", method).unsqueeze(-1)
+    T_cool = scaler(u[4].item(), "T_cool_in", method).unsqueeze(-1)
     u_norm = torch.cat((m_ref_in, m_ref_out, h_ref_in, m_cool, T_cool), dim=0)
     return u_norm
 
 def Xdenormalizer(x, descaler, method):
     utils = importlib.import_module("utils")
-    scaler = getattr(utils, scaler)
-    pressure = descaler(x[0], "pressure", method)
-    h_ref_out = descaler(x[1], "h_ref_out", method)
+    descaler = getattr(utils, descaler)
+    pressure = descaler(x[0], "pressure", method).unsqueeze(-1)
+    h_ref_out = descaler(x[1], "h_ref_out", method).unsqueeze(-1)
     x_denorm = torch.cat((pressure, h_ref_out), dim=0)
     return x_denorm
         
 def Udenormalizer(u,descaler,method):
     utils = importlib.import_module("utils")
-    scaler = getattr(utils, scaler)
-    m_ref_in = descaler(u[0], "m_ref_in", method)
-    m_ref_out = descaler(u[1], "m_ref_out", method)
-    h_ref_in = descaler(u[2], "h_ref_in", method)
-    m_cool = descaler(u[3], "m_cool", method)
-    T_cool = descaler(u[4], "T_cool_in", method)
+    descaler = getattr(utils, descaler)
+    m_ref_in = descaler(u[0], "m_ref_in", method).unsqueeze(-1)
+    m_ref_out = descaler(u[1], "m_ref_out", method).unsqueeze(-1)
+    h_ref_in = descaler(u[2], "h_ref_in", method).unsqueeze(-1)
+    m_cool = descaler(u[3], "m_cool", method).unsqueeze(-1)
+    T_cool = descaler(u[4], "T_cool_in", method).unsqueeze(-1)
     u_denorm = torch.cat((m_ref_in, m_ref_out, h_ref_in, m_cool, T_cool), dim=0)
     return u_denorm
 

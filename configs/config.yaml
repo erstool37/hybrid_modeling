@@ -52,7 +52,7 @@ optimization :
   name: "test_run"
   version: v0
 
-  optimize settings:
+  optimize_settings:
     num_workers : 16  
     pin_memory : False
     seed : 37
@@ -82,8 +82,7 @@ optimization :
   
   directories: 
     checkpoint : "src/weights/PINN0324_01.pth"
-    data_root : "../../../MATLAB/SIMULINK/optimization"
-
+    data_root : "../../MATLAB/SIMULINK/optimization"
 
   cost: eMPC
   

@@ -1,3 +1,5 @@
 ﻿,time,pressure,h_ref_out,m_ref_in,m_ref_out,h_ref_in,m_cool,T_cool_in,T_ref_in,T_ref_out,T_cool_out,z_tpsh,gamma,eps_tp,eps_sh,fval,ef
+,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,
 max,10000,300,340,0.03,0.03,220,0.5,0,,,,,,,,,
 min,0,200,450,0.01,0.01,200,0.2,-13,,,,,,,,,
