@@ -60,12 +60,13 @@ optimization :
 
   optimizer:
     optim_class: Adam
-    scheduler_class: CosineAnnealingLR
+    scheduler_class: ReduceLROnPlateau
     lr: 1e-4
     eta_min : 1e-8
     max_iter : 1000
-    tolerance : 5
-    temperature : 5 # desired temperature of T_cool = T_utils
+    tolerance : 1
+    temperature : -10 # desired temperature of T_cool = T_utils
+    step : 20 # step until desired temperature of T_ref_in changes
 
   model:
     model_class : lstmPINN

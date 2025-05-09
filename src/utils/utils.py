@@ -49,10 +49,22 @@ def gradunscaler(column, method):
 def Xnormalizer(x, scaler, method):
     utils = importlib.import_module("utils")
     scaler = getattr(utils, scaler)
+    
     pressure = scaler(x[0].item(), "pressure", method).unsqueeze(-1)
     h_ref_out = scaler(x[1].item(), "h_ref_out", method).unsqueeze(-1)
+    
     x_norm = torch.cat((pressure, h_ref_out), dim=0)
     return x_norm
+
+def Xdenormalizer(x, descaler, method):
+    utils = importlib.import_module("utils")
+    descaler = getattr(utils, descaler)
+    
+    pressure = descaler(x[0], "pressure", method).unsqueeze(-1)
+    h_ref_out = descaler(x[1], "h_ref_out", method).unsqueeze(-1)
+    
+    x_denorm = torch.cat((pressure, h_ref_out), dim=0)
+    return x_denorm
         
 def Unormalizer(u,scaler,method):
     utils = importlib.import_module("utils")
@@ -64,14 +76,6 @@ def Unormalizer(u,scaler,method):
     T_cool = scaler(u[4].item(), "T_cool_in", method).unsqueeze(-1)
     u_norm = torch.cat((m_ref_in, m_ref_out, h_ref_in, m_cool, T_cool), dim=0)
     return u_norm
-
-def Xdenormalizer(x, descaler, method):
-    utils = importlib.import_module("utils")
-    descaler = getattr(utils, descaler)
-    pressure = descaler(x[0], "pressure", method).unsqueeze(-1)
-    h_ref_out = descaler(x[1], "h_ref_out", method).unsqueeze(-1)
-    x_denorm = torch.cat((pressure, h_ref_out), dim=0)
-    return x_denorm
         
 def Udenormalizer(u,descaler,method):
     utils = importlib.import_module("utils")
@@ -83,6 +87,30 @@ def Udenormalizer(u,descaler,method):
     T_cool = descaler(u[4], "T_cool_in", method).unsqueeze(-1)
     u_denorm = torch.cat((m_ref_in, m_ref_out, h_ref_in, m_cool, T_cool), dim=0)
     return u_denorm
+
+def Onormalizer(O, scaler, method):
+    utils = importlib.import_module("utils")
+    scaler = getattr(utils, scaler)
+    
+    T_ref_in = scaler(O[0].item(), "T_ref_in", method).unsqueeze(-1)
+    T_ref_out = scaler(O[1].item(), "T_ref_out", method).unsqueeze(-1)
+    T_cool_out = scaler(O[2].item(), "T_cool_out", method).unsqueeze(-1)
+    z_tpsh = scaler(O[3].item(), "z_tpsh", method).unsqueeze(-1)
+    
+    x_norm = torch.cat((T_ref_in, T_ref_out, T_cool_out, z_tpsh), dim=0)
+    return x_norm
+
+def Odenormalizer(O, descaler, method):
+    utils = importlib.import_module("utils")
+    descaler = getattr(utils, descaler)
+    T_ref_in = descaler(O[0], "T_ref_in", method).unsqueeze(-1)
+    T_ref_out = descaler(O[1], "T_ref_out", method).unsqueeze(-1)
+    T_cool_out = descaler(O[2].item(), "T_cool_out", method).unsqueeze(-1)
+    z_tpsh = descaler(O[3].item(), "z_tpsh", method).unsqueeze(-1)
+    
+    x_denorm = torch.cat((T_ref_in, T_ref_out, T_cool_out, z_tpsh), dim=0)
+    return x_denorm
+
 
 def MAPEcalculator(pred, target, descaler, method):
     utils = importlib.import_module("utils")

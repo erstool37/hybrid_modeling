@@ -12,7 +12,9 @@ from .utils import (
     Xnormalizer,
     Unormalizer,
     Xdenormalizer,
-    Udenormalizer
+    Udenormalizer,
+    Odenormalizer,
+    Onormalizer
 )
 
 from .setseed import setseed

@@ -4,7 +4,8 @@ import torch
 import pandas as pd
 from torch.utils.data import IterableDataset
 import os.path as osp
-from utils import Xnormalizer, Unormalizer  # Make sure these are implemented and imported correctly
+from utils import Xnormalizer, Unormalizer, Onormalizer  # Make sure these are implemented and imported correctly
+import wandb
 
 class Realtimeloader(IterableDataset):
     """
@@ -37,9 +38,13 @@ class Realtimeloader(IterableDataset):
             row = df.iloc[i]
             x = torch.tensor([row["pressure"], row["h_ref_out"]], dtype=torch.float32)
             u = torch.tensor([row["m_ref_in"], row["m_ref_out"], row["h_ref_in"], row["m_cool"], row["T_cool_in"]], dtype=torch.float32)
+            others = torch.tensor([row["T_ref_in"], row["T_ref_out"], row["T_cool_out"], row["z_tpsh"]], dtype=torch.float32)
+
             x = Xnormalizer(x, self.scaler, "optim")
             u = Unormalizer(u, self.scaler, "optim")
-            self.buffer.append((x, u))
+            others = Onormalizer(others, self.scaler, "optim")
+    
+            self.buffer.append((x, u, others))
 
     def _wait_file(self, idx):
         """Polls until simulink_{idx:04d}.csv exists."""
@@ -58,15 +63,25 @@ class Realtimeloader(IterableDataset):
 
             x = torch.tensor([row["pressure"], row["h_ref_out"]], dtype=torch.float32)
             u = torch.tensor([row["m_ref_in"], row["m_ref_out"], row["h_ref_in"], row["m_cool"], row["T_cool_in"]], dtype=torch.float32)
+            others = torch.tensor([row["T_ref_in"], row["T_ref_out"], row["T_cool_out"], row["z_tpsh"]], dtype=torch.float32)
+
+            wandb.log({"real pressure": x[0]})
+            wandb.log({"real enthalpy": x[1]})
+
             x = Xnormalizer(x, self.scaler, "optim")
             u = Unormalizer(u, self.scaler, "optim")
-
-            self.buffer.append((x, u))
+            others = Onormalizer(others, self.scaler, "optim")
+    
+            self.buffer.append((x, u, others))
             self.current_idx += 1
 
             if len(self.buffer) >= self.seq_len:
                 batch = self.buffer[-self.seq_len:]
+
                 x_seq = torch.stack([b[0] for b in batch])
                 u_seq = torch.stack([b[1] for b in batch])
-                model_input = torch.cat((x_seq, u_seq), dim=1).unsqueeze(0).to(torch.float32)
+                others_seq = torch.stack([b[2] for b in batch])
+    
+                model_input = torch.cat((x_seq, u_seq, others_seq), dim=1).unsqueeze(0).to(torch.float32)
+            
                 yield model_input
