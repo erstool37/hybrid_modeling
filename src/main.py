@@ -78,7 +78,7 @@ wandb.init(project=PROJECT, name=run_name, reinit=True, resume="never", config= 
 
 # DATASET
 train_ds = data_class(dir = PARA_DIR, sequence_length = SEQ_LEN, method = 'train', scaler=SCALER)
-val_ds = data_class(dir = PARA_DIR, sequence_length = SEQ_LEN, method = 'train', scaler=SCALER)
+val_ds = data_class(dir = PARA_DIR, sequence_length = SEQ_LEN, method = 'total', scaler=SCALER)
 test_ds = data_class(dir = TEST_DIR, sequence_length = SEQ_LEN, method = 'test', scaler=SCALER)
 
 indices = np.arange(len(train_ds))
@@ -136,7 +136,7 @@ for epoch in range(NUM_EPOCHS):
             outputs = model(model_input)
             val_loss = criterion(model_input, outputs, target)
             val_losses.append(val_loss.item())
-            MAPEcalculator(outputs.detach(), target.detach(), DESCALER, "val")
+            MAPEcalculator(outputs.detach(), target.detach(), DESCALER, "total")
 
         mean_val_loss = mean(val_losses)
         wandb.log({"val_loss": mean_val_loss})
@@ -168,7 +168,7 @@ with torch.no_grad():
         model_input, target = model_input.to(device), target.to(device)
         output = model(model_input)
 
-        error = MAPEtestcalculator(output.detach(), target.detach(), DESCALER, "test")
+        error = MAPEtestcalculator(output.detach(), target.detach(), DESCALER, "total")
         errors.append(error)    
         pred.append(output)
         targets.append(target)
