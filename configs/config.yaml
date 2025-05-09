@@ -65,7 +65,7 @@ optimization :
     eta_min : 1e-8
     max_iter : 1000
     tolerance : 1
-    temperature : -10 # desired temperature of T_cool = T_utils
+    temperature : -10 # desired temperature of T_cool
     step : 20 # step until desired temperature of T_ref_in changes
 
   model:
