@@ -95,7 +95,7 @@ with torch.no_grad():
         model_input, target = model_input.to(device), target.to(device)
         output, hidden = model(model_input, hidden)
         wandb.log({"input pressure": model_input[0,0].squeeze(0)})
-        wandb.log({"warm pressure": output[0,0].squeeze(0)})
+        wandb.log({"warm pressure": output[0,0].squeeze(0)}) # <<< 이 부분이 너가 본 그래프의 오른쪽 그래프
 #===================================== INFERENCE END =====================================
 
 
