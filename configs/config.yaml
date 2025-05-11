@@ -82,10 +82,7 @@ optimization :
     time_step : 2
   
   directories: 
-    checkpoint : "src/weights/total_test_run_0509_v2.pth"
+    checkpoint : "src/weights/total_test_run_0511_v3.pth"
     data_root : "../../MATLAB/SIMULINK/optimization"
 
   cost: eMPC
-  
-  
-

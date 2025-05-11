@@ -60,8 +60,6 @@ TEST_DIR = config["directories"]["test_root"]
 INF_DIR = config["directories"]["inf_root"]
 
 # for reproducibility
-torch.set_num_threads(1)
-torch.set_num_interop_threads(1)
 torch.use_deterministic_algorithms(True)
 torch.backends.mkldnn.deterministic = True
 torch.backends.mkldnn.benchmark = False
@@ -111,7 +109,6 @@ optimizer = optim_class(model.parameters(), lr=LR, weight_decay=W_DECAY)
 scheduler = scheduler_class(optimizer, T_max=NUM_EPOCHS, eta_min=ETA_MIN)
 
 # TRAINING
-
 wandb.watch(model, criterion, log="all", log_freq=5)
 best_val_loss = float("inf")
 counter = 0
@@ -121,9 +118,7 @@ for epoch in range(NUM_EPOCHS):
     print(f"Epoch {epoch+1}/{NUM_EPOCHS} - Training ")
     for model_input, target in tqdm(train_dl): 
         model_input, target = model_input.to(device), target.to(device)
-
         outputs = model(model_input)
-        
         train_loss = criterion(model_input, outputs, target)
         train_losses.append(train_loss.item())
         optimizer.zero_grad()
@@ -166,9 +161,8 @@ wandb.finish()
 torch.save(model.state_dict(), checkpoint)
 
 # Inference
-checkpoint = "src/weights/total_test_run_0411_v2.pth"
+checkpoint = "src/weights/total_test_run_0511_v3.pth"
 model.load_state_dict(torch.load(checkpoint, map_location=device))
-model.lstm.flatten_parameters()
 model.eval()
 
 # Inference loop
@@ -177,10 +171,6 @@ with torch.no_grad():
     for model_input, target in tqdm(val_dl):
         model_input, target = model_input.to(device), target.to(device)
         output = model(model_input)
-        # for b in range(BATCH_SIZE):
-        #     wandb.log({"pred test pressure": output[b, 0]})
-        wandb.log({"pred test pressure": output[0, 0]})
-        wandb.log({"real test pressure": target[0, 0]})
 
         error = MAPEtestcalculator(output.detach(), target.detach(), DESCALER, "total")
         errors.append(error)    
@@ -191,35 +181,6 @@ errors = torch.cat(errors, dim=0)
 pred = torch.cat(pred, dim=0)
 targets = torch.cat(targets, dim=0)
 
-from sklearn.linear_model import LinearRegression
-model_outputs = pred.cpu().numpy()  
-true_targets = targets.cpu().numpy() 
-
-slopes, intercepts = [], []
-for i in range(model_outputs.shape[1]):
-    reg = LinearRegression()
-    Xi = model_outputs[:, i].reshape(-1, 1)   
-    yi = true_targets[:,   i]                 
-    reg.fit(Xi, yi)
-    slopes.append(reg.coef_[0])
-    intercepts.append(reg.intercept_)
-
-import numpy as np
-slopes = np.array(slopes)        
-intercepts = np.array(intercepts)
-adjusted_outputs = model_outputs * slopes + intercepts
-adjusted_outputs = torch.tensor(adjusted_outputs, device=pred.device, dtype=pred.dtype)
-from sklearn.metrics import r2_score
-# r2_original = [r2_score(true_targets[:, i], model_outputs[:, i]) for i in range(model_outputs.shape[1])]
-# r2_adjusted = [r2_score(true_targets[:, i], adjusted_outputs_np[:, i]) for i in range(model_outputs.shape[1])]
-
-# Print results
-keys = ["pressure", "enthalpy", "zeta"]
-for i, key in enumerate(keys):
-    print(f"{key}: R² original = {r2_original[i]:.4f}, R² adjusted = {r2_adjusted[i]:.4f}")
-print("Slope:", slopes)
-print("Intercept:", intercepts)
-
 keys = ["pressure", "enthalpy", "zeta"]
 
-inference(adjusted_outputs, targets, errors, DESCALER, "total", INF_DIR, run_name)
+inference(pred), targets, errors, DESCALER, "total", INF_DIR, run_name)

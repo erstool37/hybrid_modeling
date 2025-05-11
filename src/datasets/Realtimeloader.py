@@ -22,7 +22,7 @@ class Realtimeloader(IterableDataset):
         super().__init__()
         self.dir = dir
         self.seq_len = seq_len
-        self.poll_interval = 0.3  # seconds
+        self.poll_interval = 0.3
         self.prefix = "result_"
         self.current_idx = 0
         self.buffer = []
@@ -33,8 +33,10 @@ class Realtimeloader(IterableDataset):
 
     def _initialize_buffer(self):
         """Load all startup_*.csv files to fill the initial sequence buffer."""
-        path = os.path.join(self.dir, "x_simul", "startup_*.csv")
-        file_list = sorted(glob.glob(path))
+        file_list = sorted(glob.glob(osp.join(self.dir, "x_simul", "startup_*.csv")))
+        print(glob.glob(osp.join("../../..", "MATLAB/SIMULINK/optimization/x_simul", "startup_*.csv")))
+        print(os.getcwd())
+        print(file_list)
 
         for file_path in file_list:
             df = pd.read_csv(file_path)
@@ -48,7 +50,7 @@ class Realtimeloader(IterableDataset):
                 u = Unormalizer(u, self.scaler, "optim")
                 others = Onormalizer(others, self.scaler, "optim")
 
-                self.buffer.append((x, u, others))  
+                self.buffer.append((x, u, others))
 
     def _wait_file(self, idx):
         """Polls until simulink_{idx:04d}.csv exists."""
@@ -61,7 +63,6 @@ class Realtimeloader(IterableDataset):
 
     def __iter__(self):
         while True:
-            print(1)
             if self.first_call:
                 batch = self.buffer[-self.seq_len:]
                 x_seq = torch.stack([b[0] for b in batch])

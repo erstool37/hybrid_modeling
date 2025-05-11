@@ -56,15 +56,18 @@ today = datetime.datetime.now().strftime("%m%d")
 run_name = f"{NAME}_{today}_{VER}"
 checkpoint = f"{CHECKPOINT}{run_name}.pth"
 
+torch.use_deterministic_algorithms(True)
+torch.backends.mkldnn.deterministic = True
+torch.backends.mkldnn.benchmark = False
 setseed(SEED)
 wandb.init(project=PROJECT, name=run_name, reinit=True, resume="never", config= config)
 
 # load data
-train_ds = Parameterloader(dir = PARA_DIR, sequence_length = SEQ_LEN, method = 'total', scaler=SCALER)
-indices = np.arange(len(train_ds))
-train_idx, val_idx = train_test_split(indices, test_size=0.2, shuffle=False)
-val_ds = Subset(train_ds, val_idx)
-val_dl = DataLoader(val_ds, batch_size=1, shuffle=False, num_workers=0)
+# train_ds = Parameterloader(dir = PARA_DIR, sequence_length = SEQ_LEN, method = 'total', scaler=SCALER)
+# indices = np.arange(len(train_ds))
+# train_idx, val_idx = train_test_split(indices, test_size=0.2, shuffle=False)
+# val_ds = Subset(train_ds, val_idx)
+# val_dl = DataLoader(val_ds, batch_size=1, shuffle=False, num_workers=0)
 
 # LOAD MODEL
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -80,6 +83,7 @@ scheduler_class = getattr(optim.lr_scheduler, SCHEDULER_CLASS)
 
 dataset = data_class(dir=DATA_ROOT, seq_len=SEQ_LEN, scaler=SCALER)
 data_iter = iter(dataset)
+
 model = model_class(input_size=7, hidden_dim=HIDDEN_DIM, num_layers=NUM_LAYERS, output_size=6).to(device)
 model.load_state_dict(torch.load(CHECKPOINT, map_location=device))
 
@@ -87,16 +91,12 @@ model.eval()
 for param in model.parameters():
     param.requires_grad = False
 
-# Warm up LSTM
-#===================================== INFERENCE =====================================
-with torch.no_grad():
-    for model_input, target in tqdm(val_dl):
-        model_input, target = model_input.to(device), target.to(device)
-        output = model(model_input)
-        wandb.log({"input pressure": model_input[0,0].squeeze(0)})
-        wandb.log({"warm pressure": output[0,0].squeeze(0)}) # <<< 이 부분이 너가 본 그래프의 오른쪽 그래프
-#===================================== INFERENCE END =====================================
-
+# with torch.no_grad():
+#     for model_input, target in tqdm(val_dl):
+#         model_input, target = model_input.to(device), target.to(device)
+#         output = model(model_input)
+#         wandb.log({"input pressure": model_input[0,0].squeeze(0)})
+#         wandb.log({"warm pressure": output[0,0].squeeze(0)}) 
 
 # Simulation start
 print("Simulation start")
