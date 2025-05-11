@@ -113,8 +113,8 @@ with torch.no_grad():
     for model_input, target in tqdm(val_dl):
         model_input, target = model_input.to(device), target.to(device)
         output,_ = model(model_input, hidden)
-        wandb.log({"real pressure": target[0, 0]}) # << 이부분이 너가 본 그래프의 왼쪽 그래프
-        wandb.log({"pred pressure": output[0]})
+        wandb.log({"real pressure": target[0, 0]})
+        wandb.log({"pred pressure": output[0]}) # << 이부분이 너가 본 그래프의 왼쪽 그래프
 
 # ======================INFERENCE END =======================
 
