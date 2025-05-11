@@ -66,7 +66,7 @@ optimization :
     max_iter : 1000
     tolerance : 1
     temperature : -10 # desired temperature of T_cool
-    step : 20 # step until desired temperature of T_ref_in changes
+    step : 40 # step until desired temperature of T_ref_in changes
 
   model:
     model_class : lstmPINN
@@ -82,7 +82,7 @@ optimization :
     time_step : 2
   
   directories: 
-    checkpoint : "src/weights/PINN0324_01.pth"
+    checkpoint : "src/weights/total_test_run_0509_v2.pth"
     data_root : "../../MATLAB/SIMULINK/optimization"
 
   cost: eMPC

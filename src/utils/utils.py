@@ -97,19 +97,20 @@ def Onormalizer(O, scaler, method):
     T_cool_out = scaler(O[2].item(), "T_cool_out", method).unsqueeze(-1)
     z_tpsh = scaler(O[3].item(), "z_tpsh", method).unsqueeze(-1)
     
-    x_norm = torch.cat((T_ref_in, T_ref_out, T_cool_out, z_tpsh), dim=0)
-    return x_norm
+    O_norm = torch.cat((T_ref_in, T_ref_out, T_cool_out, z_tpsh), dim=0)
+    return O_norm
 
 def Odenormalizer(O, descaler, method):
     utils = importlib.import_module("utils")
     descaler = getattr(utils, descaler)
+
     T_ref_in = descaler(O[0], "T_ref_in", method).unsqueeze(-1)
     T_ref_out = descaler(O[1], "T_ref_out", method).unsqueeze(-1)
-    T_cool_out = descaler(O[2].item(), "T_cool_out", method).unsqueeze(-1)
-    z_tpsh = descaler(O[3].item(), "z_tpsh", method).unsqueeze(-1)
+    T_cool_out = descaler(O[2], "T_cool_out", method).unsqueeze(-1)
+    z_tpsh = descaler(O[3], "z_tpsh", method).unsqueeze(-1)
     
-    x_denorm = torch.cat((T_ref_in, T_ref_out, T_cool_out, z_tpsh), dim=0)
-    return x_denorm
+    O_denorm = torch.cat((T_ref_in, T_ref_out, T_cool_out, z_tpsh), dim=0)
+    return O_denorm
 
 
 def MAPEcalculator(pred, target, descaler, method):

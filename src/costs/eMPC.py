@@ -20,10 +20,10 @@ class eMPC(nn.Module):
 
     def forward(self, x_pred, model_input, u_now):
         p_ref_out_next, h_ref_out_next = Xdenormalizer(x_pred, self.descaler, "optim")
-        m_ref_in_next, _, h_ref_in_next, m_cool_next, _  = Udenormalizer(u_now, self.descaler, "optim")
+        m_ref_in_next, _, h_ref_in_next, m_cool_next, T_cool_in  = Udenormalizer(u_now, self.descaler, "optim")
         T_ref_in, T_ref_out, T_cool_out, z_tpsh = Odenormalizer(model_input, self.descaler, "optim")
         
-        T_cool_out_pred = m_ref_in_next * (h_ref_in_next - h_ref_out_next) / (m_cool_next * self.CE.Cp(T_cool_out.unsqueeze(0).unsqueeze(-1))) + T_cool_out
+        T_cool_out_pred = m_ref_in_next * (h_ref_out_next - h_ref_in_next) / (m_cool_next * self.CE.Cp(T_cool_out.unsqueeze(0).unsqueeze(-1))) + T_cool_in.detach()
         T_cool_out_pred = T_cool_out_pred.squeeze(0).squeeze(-1)
     
         loss_T = F.mse_loss(self.T_target, T_cool_out_pred)
@@ -32,8 +32,8 @@ class eMPC(nn.Module):
 
         wandb.log({"loss_T": loss_T.item()})
         wandb.log({"loss_total": loss_total.item()})
-
-        wandb.log({"pressure_pred": p_ref_out_next})
-        wandb.log({"enthalpy_pred": h_ref_out_next})
+        wandb.log({"T_cool_out": T_cool_out.item()})
+        wandb.log({"predicted_pressure": p_ref_out_next})
+        wandb.log({"predicted_enthalpy": h_ref_out_next})
 
         return loss_total

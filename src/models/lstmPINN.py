@@ -16,13 +16,13 @@ class lstmPINN(nn.Module):
         #     nn.Linear(hidden_dim, output_size)
         # )
 
-    def forward(self, x):
+    def forward(self, x, hidden=None):
         # Disable cuDNN autotuner for deterministic LSTM behavior
         with torch.backends.cudnn.flags(enabled=False):
-            output, _ = self.lstm(x[:, :, :7])
+            output, hidden = self.lstm(x[:, :, :7])
 
         output = output[:, -1, :]
         x = self.activation(output)
         x = self.fc(x)    
         
-        return x
+        return x, hidden
