@@ -15,6 +15,7 @@ import json
 from torch.utils.data import TensorDataset, DataLoader, Dataset, Subset
 from sklearn.model_selection import train_test_split
 from utils import MAPEcalculator, MAPEtestcalculator, setseed, inference
+import os
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-c", "--config", type=str, required=True, default="configs/config.yaml")
@@ -58,8 +59,15 @@ PARA_DIR = config["directories"]["data_root"]
 TEST_DIR = config["directories"]["test_root"]
 INF_DIR = config["directories"]["inf_root"]
 
+# for reproducibility
+torch.set_num_threads(1)
+torch.set_num_interop_threads(1)
+torch.use_deterministic_algorithms(True)
+torch.backends.mkldnn.deterministic = True
+torch.backends.mkldnn.benchmark = False
 setseed(SEED)
 
+# load modules
 data_module = importlib.import_module(f"datasets.{DATALOADER}")
 model_module = importlib.import_module(f"models.{MODEL}")
 loss_module = importlib.import_module(f"losses.{LOSS}")
@@ -91,9 +99,9 @@ train_ds = Subset(train_ds, train_idx)
 val_ds = Subset(val_ds, val_idx)
 test_ds = Subset(test_ds, test_idx)
 
-train_dl = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS, pin_memory=PIN_MEMORY)
-val_dl = DataLoader(val_ds, batch_size=1, shuffle=False, num_workers=NUM_WORKERS, pin_memory=PIN_MEMORY)
-test_dl = DataLoader(test_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS, pin_memory=PIN_MEMORY)
+train_dl = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=0, pin_memory=PIN_MEMORY)
+val_dl = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=0, pin_memory=PIN_MEMORY)
+test_dl = DataLoader(test_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=0, pin_memory=PIN_MEMORY)
 
 # INITIALIZE
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -114,7 +122,7 @@ for epoch in range(NUM_EPOCHS):
     for model_input, target in tqdm(train_dl): 
         model_input, target = model_input.to(device), target.to(device)
 
-        outputs, _ = model(model_input)
+        outputs = model(model_input)
         
         train_loss = criterion(model_input, outputs, target)
         train_losses.append(train_loss.item())
@@ -134,7 +142,7 @@ for epoch in range(NUM_EPOCHS):
         print(f"Epoch {epoch+1}/{NUM_EPOCHS} - Validation")
         for model_input, target in tqdm(val_dl):
             model_input, target  = model_input.to(device), target.to(device)
-            outputs, _ = model(model_input)
+            outputs = model(model_input)
             val_loss = criterion(model_input, outputs, target)
             val_losses.append(val_loss.item())
             MAPEcalculator(outputs.detach(), target.detach(), DESCALER, "total")
@@ -157,28 +165,23 @@ for epoch in range(NUM_EPOCHS):
 wandb.finish()
 torch.save(model.state_dict(), checkpoint)
 """
+
 # Inference
-# checkpoint = "src/weights/PINN0324_07.pth"
+checkpoint = "src/weights/total_test_run_0411_v2.pth"
 model.load_state_dict(torch.load(checkpoint, map_location=device))
 model.lstm.flatten_parameters()
-torch.backends.cudnn.deterministic=True  
-torch.backends.cudnn.benchmark=False  
-torch.backends.cudnn.enabled = False
-torch.backends.cuda.matmul.allow_tf32 = False
-torch.backends.cudnn.allow_tf32       = False
-# (and if you’re on PyTorch ≥1.8)
-torch.use_deterministic_algorithms(True)
-hidden = None
 model.eval()
-print(checkpoint)
+
 # Inference loop
 pred, targets, errors = [], [], []
 with torch.no_grad():
     for model_input, target in tqdm(val_dl):
         model_input, target = model_input.to(device), target.to(device)
-        output, _ = model(model_input)
-        # wandb.log({"real test pressure": target[0, 0]})
-        # wandb.log({"pred test pressure": output[0,0]})
+        output = model(model_input)
+        # for b in range(BATCH_SIZE):
+        #     wandb.log({"pred test pressure": output[b, 0]})
+        wandb.log({"pred test pressure": output[0, 0]})
+        wandb.log({"real test pressure": target[0, 0]})
 
         error = MAPEtestcalculator(output.detach(), target.detach(), DESCALER, "total")
         errors.append(error)    
@@ -188,6 +191,31 @@ with torch.no_grad():
 errors = torch.cat(errors, dim=0)
 pred = torch.cat(pred, dim=0)
 targets = torch.cat(targets, dim=0)
+
+from sklearn.linear_model import LinearRegression
+model_outputs = pred.cpu().numpy()  
+true_targets = targets.cpu().numpy() 
+
+slopes, intercepts = [], []
+for i in range(model_outputs.shape[1]):
+    reg = LinearRegression()
+    Xi = model_outputs[:, i].reshape(-1, 1)   
+    yi = true_targets[:,   i]                 
+    reg.fit(Xi, yi)
+    slopes.append(reg.coef_[0])
+    intercepts.append(reg.intercept_)
+
+import numpy as np
+slopes = np.array(slopes)        
+intercepts = np.array(intercepts)
+adjusted_outputs = model_outputs * slopes + intercepts
+adjusted_outputs = torch.tensor(adjusted_outputs, device=pred.device, dtype=pred.dtype)
+
+r2_original = [r2_score(true_targets[:, i], model_outputs[:, i]) for i in range(model_outputs.shape[1])]
+
+print("Slope:", slopes)
+print("Intercept:", intercepts)
+
 keys = ["pressure", "enthalpy", "zeta"]
 
-inference(pred, targets, errors, DESCALER, "test", INF_DIR, run_name)
+inference(adjusted_outputs, targets, errors, DESCALER, "total", INF_DIR, run_name)

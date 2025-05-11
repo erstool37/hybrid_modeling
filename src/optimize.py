@@ -89,11 +89,10 @@ for param in model.parameters():
 
 # Warm up LSTM
 #===================================== INFERENCE =====================================
-hidden = None
 with torch.no_grad():
     for model_input, target in tqdm(val_dl):
         model_input, target = model_input.to(device), target.to(device)
-        output, hidden = model(model_input, hidden)
+        output = model(model_input)
         wandb.log({"input pressure": model_input[0,0].squeeze(0)})
         wandb.log({"warm pressure": output[0,0].squeeze(0)}) # <<< 이 부분이 너가 본 그래프의 오른쪽 그래프
 #===================================== INFERENCE END =====================================
@@ -118,8 +117,7 @@ for idx in tqdm(range(NUM)):
         seq = hist.clone()
         full_u = torch.cat([u_now, torch.tensor([T_cool_in_fixed], device=u_now.device)])
         seq[0, -1, 2:7] = full_u
-        x_pred, hidden = model(seq[:, :, :7], hidden)
-        x_pred = x_pred.squeeze(0)
+        x_pred = model(seq[:, :, :7]).squeeze(0)
         optimizer.zero_grad()
         loss = cost(x_pred, seq[0, -1, 7:11], full_u)
         loss.backward()

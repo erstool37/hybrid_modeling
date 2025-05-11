@@ -70,7 +70,6 @@ class Realtimeloader(IterableDataset):
                 model_input = torch.cat((x_seq, u_seq, others_seq), dim=1).unsqueeze(0).to(torch.float32)
                 self.first_call = False
                 self.current_idx += 1
-                print(model_input)
                 yield model_input
 
             else:
@@ -99,5 +98,4 @@ class Realtimeloader(IterableDataset):
 
                 model_input = torch.cat((x_seq, u_seq, others_seq), dim=1).unsqueeze(0).to(torch.float32)
                 self.current_idx += 1
-                print(model_input)
                 yield model_input

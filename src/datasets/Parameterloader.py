@@ -11,7 +11,7 @@ import importlib
 
 class Parameterloader(Dataset):
     """
-    Dataloader for the lstmPINN model,
+    Dataloader for the lstmPINN model
     """
     def __init__(self, dir, sequence_length, method, scaler):
         super().__init__()
@@ -40,7 +40,7 @@ class Parameterloader(Dataset):
         step_theta = self.thetas[idx + self.sequence_length - 1] # current time step theta
         pred_state = self.states[idx + self.sequence_length] # next time step state
 
-        # Flatten tensors and concatenate them
+        # Flatten tensors and concatenate
         model_input = torch.cat((step_state, step_input), dim=1)
         ground_truth = torch.cat((pred_state, step_theta), dim=0)
         return model_input, ground_truth

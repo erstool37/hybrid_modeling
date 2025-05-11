@@ -17,12 +17,9 @@ class lstmPINN(nn.Module):
         # )
 
     def forward(self, x, hidden=None):
-        # Disable cuDNN autotuner for deterministic LSTM behavior
-        with torch.backends.cudnn.flags(enabled=False):
-            output, hidden = self.lstm(x[:, :, :7])
-
+        output, _ = self.lstm(x[:, :, :7])
         output = output[:, -1, :]
         x = self.activation(output)
         x = self.fc(x)    
         
-        return x, hidden
+        return x
