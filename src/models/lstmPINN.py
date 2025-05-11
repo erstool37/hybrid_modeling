@@ -7,7 +7,7 @@ class lstmPINN(nn.Module):
     """
     def __init__(self, input_size, hidden_dim, num_layers, output_size):
         super(lstmPINN, self).__init__()
-        self.lstm = nn.LSTM(input_size, hidden_dim, num_layers)
+        self.lstm = nn.LSTM(input_size, hidden_dim, num_layers, batch_first=True)
         self.activation = nn.ReLU()                
         self.fc = nn.Linear(hidden_dim, output_size)     
         # self.fc = nn.Sequential(

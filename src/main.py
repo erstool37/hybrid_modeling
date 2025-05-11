@@ -111,7 +111,7 @@ optimizer = optim_class(model.parameters(), lr=LR, weight_decay=W_DECAY)
 scheduler = scheduler_class(optimizer, T_max=NUM_EPOCHS, eta_min=ETA_MIN)
 
 # TRAINING
-"""
+
 wandb.watch(model, criterion, log="all", log_freq=5)
 best_val_loss = float("inf")
 counter = 0
@@ -164,7 +164,6 @@ for epoch in range(NUM_EPOCHS):
     print(f"Epoch {epoch+1}/{NUM_EPOCHS} results - Train Loss: {mean_train_loss:.4f} Validation Loss: {mean_val_loss:.4f} - LR: {current_lr:.8f}")
 wandb.finish()
 torch.save(model.state_dict(), checkpoint)
-"""
 
 # Inference
 checkpoint = "src/weights/total_test_run_0411_v2.pth"
@@ -210,9 +209,14 @@ slopes = np.array(slopes)
 intercepts = np.array(intercepts)
 adjusted_outputs = model_outputs * slopes + intercepts
 adjusted_outputs = torch.tensor(adjusted_outputs, device=pred.device, dtype=pred.dtype)
+from sklearn.metrics import r2_score
+# r2_original = [r2_score(true_targets[:, i], model_outputs[:, i]) for i in range(model_outputs.shape[1])]
+# r2_adjusted = [r2_score(true_targets[:, i], adjusted_outputs_np[:, i]) for i in range(model_outputs.shape[1])]
 
-r2_original = [r2_score(true_targets[:, i], model_outputs[:, i]) for i in range(model_outputs.shape[1])]
-
+# Print results
+keys = ["pressure", "enthalpy", "zeta"]
+for i, key in enumerate(keys):
+    print(f"{key}: R² original = {r2_original[i]:.4f}, R² adjusted = {r2_adjusted[i]:.4f}")
 print("Slope:", slopes)
 print("Intercept:", intercepts)
 
