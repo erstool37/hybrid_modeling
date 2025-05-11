@@ -92,7 +92,7 @@ val_ds = Subset(val_ds, val_idx)
 test_ds = Subset(test_ds, test_idx)
 
 train_dl = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS, pin_memory=PIN_MEMORY)
-val_dl = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS, pin_memory=PIN_MEMORY)
+val_dl = DataLoader(val_ds, batch_size=1, shuffle=False, num_workers=NUM_WORKERS, pin_memory=PIN_MEMORY)
 test_dl = DataLoader(test_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS, pin_memory=PIN_MEMORY)
 
 # INITIALIZE
@@ -103,6 +103,7 @@ optimizer = optim_class(model.parameters(), lr=LR, weight_decay=W_DECAY)
 scheduler = scheduler_class(optimizer, T_max=NUM_EPOCHS, eta_min=ETA_MIN)
 
 # TRAINING
+"""
 wandb.watch(model, criterion, log="all", log_freq=5)
 best_val_loss = float("inf")
 counter = 0
@@ -113,7 +114,7 @@ for epoch in range(NUM_EPOCHS):
     for model_input, target in tqdm(train_dl): 
         model_input, target = model_input.to(device), target.to(device)
 
-        outputs = model(model_input)
+        outputs, _ = model(model_input)
         
         train_loss = criterion(model_input, outputs, target)
         train_losses.append(train_loss.item())
@@ -133,7 +134,7 @@ for epoch in range(NUM_EPOCHS):
         print(f"Epoch {epoch+1}/{NUM_EPOCHS} - Validation")
         for model_input, target in tqdm(val_dl):
             model_input, target  = model_input.to(device), target.to(device)
-            outputs = model(model_input)
+            outputs, _ = model(model_input)
             val_loss = criterion(model_input, outputs, target)
             val_losses.append(val_loss.item())
             MAPEcalculator(outputs.detach(), target.detach(), DESCALER, "total")
@@ -155,18 +156,29 @@ for epoch in range(NUM_EPOCHS):
     print(f"Epoch {epoch+1}/{NUM_EPOCHS} results - Train Loss: {mean_train_loss:.4f} Validation Loss: {mean_val_loss:.4f} - LR: {current_lr:.8f}")
 wandb.finish()
 torch.save(model.state_dict(), checkpoint)
-
+"""
 # Inference
 # checkpoint = "src/weights/PINN0324_07.pth"
 model.load_state_dict(torch.load(checkpoint, map_location=device))
+model.lstm.flatten_parameters()
+torch.backends.cudnn.deterministic=True  
+torch.backends.cudnn.benchmark=False  
+torch.backends.cudnn.enabled = False
+torch.backends.cuda.matmul.allow_tf32 = False
+torch.backends.cudnn.allow_tf32       = False
+# (and if you’re on PyTorch ≥1.8)
+torch.use_deterministic_algorithms(True)
+hidden = None
 model.eval()
-
+print(checkpoint)
 # Inference loop
 pred, targets, errors = [], [], []
 with torch.no_grad():
-    for model_input, target in tqdm(test_dl):
+    for model_input, target in tqdm(val_dl):
         model_input, target = model_input.to(device), target.to(device)
-        output = model(model_input)
+        output, _ = model(model_input)
+        # wandb.log({"real test pressure": target[0, 0]})
+        # wandb.log({"pred test pressure": output[0,0]})
 
         error = MAPEtestcalculator(output.detach(), target.detach(), DESCALER, "total")
         errors.append(error)    

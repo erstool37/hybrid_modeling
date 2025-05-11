@@ -102,8 +102,7 @@ criterion = criterion_class(time_step=TIME_STEP, w_res=W_RES, w_theta=W_THETA, w
 optimizer = optim_class(model.parameters(), lr=LR, weight_decay=W_DECAY)
 scheduler = scheduler_class(optimizer, T_max=NUM_EPOCHS, eta_min=ETA_MIN)
 
-# ======================INFERENCE=======================
-checkpoint = "src/weights/total_test_run_0509_v2.pth"
+checkpoint = "src/weights/total_test_run_0511_v2.pth"
 model.load_state_dict(torch.load(checkpoint, map_location=device))
 model.eval()
 
@@ -115,9 +114,6 @@ with torch.no_grad():
         output,_ = model(model_input, hidden)
         wandb.log({"real pressure": target[0, 0]})
         wandb.log({"pred pressure": output[0,0]}) # << 이부분이 너가 본 그래프의 왼쪽 그래프
-
-# ======================INFERENCE END =======================
-
 
         error = MAPEtestcalculator(output.detach(), target.detach(), DESCALER, "total")
         errors.append(error)    

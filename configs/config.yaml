@@ -3,7 +3,7 @@
 
 project: "heat exchanger"
 name: "total_test_run"
-version: v2
+version: v3
 
 train_settings:
   batch_size : 8192
