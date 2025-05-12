@@ -52,7 +52,6 @@ TOL = float(cfg["optimizer"]["tolerance"])
 TEMP= float(cfg["optimizer"]["temperature"])
 STEP = int(cfg["optimizer"]["step"])
 PARA_DIR = config["directories"]["data_root"]
-NOISE = int(cfg["optimize_settings"]["noise"])
 
 today = datetime.datetime.now().strftime("%m%d")
 run_name = f"{NAME}_{today}_{VER}"
@@ -63,6 +62,13 @@ torch.backends.mkldnn.deterministic = True
 torch.backends.mkldnn.benchmark = False
 setseed(SEED)
 wandb.init(project=PROJECT, name=run_name, reinit=True, resume="never", config= config)
+
+# load data
+# train_ds = Parameterloader(dir = PARA_DIR, sequence_length = SEQ_LEN, method = 'total', scaler=SCALER)
+# indices = np.arange(len(train_ds))
+# train_idx, val_idx = train_test_split(indices, test_size=0.2, shuffle=False)
+# val_ds = Subset(train_ds, val_idx)
+# val_dl = DataLoader(val_ds, batch_size=1, shuffle=False, num_workers=0)
 
 # LOAD MODEL
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -93,9 +99,8 @@ for idx in tqdm(range(NUM)):
     full_seq = next(data_iter).to(device)
     hist = full_seq.detach()
     u_full = hist[0, -1, 2:7].clone().detach()
-    m_cool_in_fixed = u_full[3].item()
     T_cool_in_fixed = u_full[4].item()
-    u_now = torch.tensor([u_full[0].item(), u_full[2].item()], device=u_full.device, requires_grad=True)
+    u_now = u_full[0:4].clone().detach().requires_grad_(True)
 
     cost = cost_class(T_target=set_temp, descaler=DESCALER).to(device)
     optimizer = optim_class([u_now], lr=LR)
@@ -105,12 +110,7 @@ for idx in tqdm(range(NUM)):
     start_time = time.time()
     for step in range(1, MAX_ITER + 1):
         seq = hist.clone()
-        full_u = torch.cat([
-            u_now[0].unsqueeze(0),                         
-            u_now[0].detach().unsqueeze(0),
-            u_now[1].unsqueeze(0),                
-            torch.tensor([m_cool_in_fixed], device=u_now.device),   # m_cool
-            torch.tensor([T_cool_in_fixed], device=u_now.device)])
+        full_u = torch.cat([u_now, torch.tensor([T_cool_in_fixed], device=u_now.device)])
         seq[0, -1, 2:7] = full_u
         x_pred = model(seq[:, :, :7]).squeeze(0)
         optimizer.zero_grad()
@@ -124,17 +124,12 @@ for idx in tqdm(range(NUM)):
     end_time = time.time()
 
     u_now = u_now.detach()
-    full_u = torch.cat([
-    u_now[0].unsqueeze(0),  # m_ref_in
-    u_now[0].unsqueeze(0),  # m_ref_out (same as m_ref_in)
-    u_now[1].unsqueeze(0),  # h_ref_in
-    torch.tensor([m_cool_in_fixed], device=u_now.device),
-    torch.tensor([T_cool_in_fixed], device=u_now.device)
-])
+    u_now[1] = u_now[0]
+    full_u = torch.cat([u_now, torch.tensor([T_cool_in_fixed], device=device)])
     u_now_unnorm = Udenormalizer(full_u, DESCALER, "optim")
     
     if idx % int(STEP) == 0:
-        u_now_unnorm[4] = TEMP + np.random.uniform(-NOISE, NOISE)
+        u_now_unnorm[4] += np.random.uniform(-2, 2)
     u_optim = u_now_unnorm.cpu().numpy().tolist()
 
     wandb.log({

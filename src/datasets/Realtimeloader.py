@@ -33,11 +33,14 @@ class Realtimeloader(IterableDataset):
 
     def _initialize_buffer(self):
         """Load all startup_*.csv files to fill the initial sequence buffer."""
-        file_list = sorted(glob.glob(osp.join(self.dir, "x_simul", "startup_*.csv")))
-        print(glob.glob(osp.join("../../..", "MATLAB/SIMULINK/optimization/x_simul", "startup_*.csv")))
-        print(os.getcwd())
-        print(file_list)
-
+        file_list = sorted(glob.glob(osp.join(self.dir, "x_simul", "startup/startup_*.csv")))
+        past_path = glob.glob(osp.join(self.dir, "u_optim", "*.csv"))
+        past_path2 = glob.glob(osp.join(self.dir, "x_simul", "*.csv"))
+        for path in past_path:
+            os.remove(path)
+        for path in past_path2:
+            os.remove(path)
+            
         for file_path in file_list:
             df = pd.read_csv(file_path)
             for i in range(len(df)):

@@ -15,7 +15,7 @@ class Parameterloader(Dataset):
     """
     def __init__(self, dir, sequence_length, method, scaler):
         super().__init__()
-        self.sequence_length = sequence_length # exists for lstmPINN
+        self.sequence_length = sequence_length
         self.ds = pd.read_csv(dir)
         self.method = method
 
