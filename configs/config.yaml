@@ -2,8 +2,8 @@
 # check if optimizing or PINN training
 
 project: "heat exchanger"
-name: "total_test_run"
-version: v3
+name: "best_run_selection"
+version: vF
 
 train_settings:
   batch_size : 8192
@@ -19,15 +19,16 @@ preprocess:
   time_step : 2
   test_size : 0.2
   random_state : 37
+  horizon : 5
 
 model:
   dataloader : Parameterloader
   model_class : lstmPINN
   lstm_size : 512
-  lstm_layers : 4
+  lstm_layers : 5
   output_size : 6
   drop_rate : 0.0
-  w_res : 2
+  w_res : 5
   w_theta : 30
   w_ode : 1
 

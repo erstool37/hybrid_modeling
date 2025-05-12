@@ -160,8 +160,8 @@ for epoch in range(NUM_EPOCHS):
 wandb.finish()
 torch.save(model.state_dict(), checkpoint)
 
+
 # Inference
-checkpoint = "src/weights/total_test_run_0511_v3.pth"
 model.load_state_dict(torch.load(checkpoint, map_location=device))
 model.eval()
 
@@ -183,4 +183,4 @@ targets = torch.cat(targets, dim=0)
 
 keys = ["pressure", "enthalpy", "zeta"]
 
-inference(pred), targets, errors, DESCALER, "total", INF_DIR, run_name)
+inference(pred, targets, errors, DESCALER, "total", INF_DIR, run_name)
