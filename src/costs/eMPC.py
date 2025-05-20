@@ -35,7 +35,7 @@ class eMPC(nn.Module):
         T_cool_out_pred = T_cool_out_pred.squeeze(0).squeeze(-1)
 
         # Cost function
-        loss_T_pred = T_cool_out - T_cool_out_pred
+        loss_T_pred = (self.T_target - T_cool_out) - T_cool_out_pred
         loss_T = F.mse_loss(self.T_target, T_cool_out_pred)
         # loss_Q = -0.2 * Q_ref
 
