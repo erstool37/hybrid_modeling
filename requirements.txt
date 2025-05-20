@@ -44,3 +44,4 @@ tqdm
 matplotlib
 matlab.engine
 opencv-python-headless
+torchdiffeq

@@ -7,6 +7,8 @@ Created on Fri Aug 30 18:51:43 2024
 import torch
 import numpy as np
 from .utility import zero_one_scale, zero_one_descale
+from utils import Xdenormalizer, Udenormalizer, Odenormalizer, Pdenormalizer
+from torchdiffeq import odeint
 
 class Evaporator(object):
     
@@ -78,20 +80,132 @@ class Evaporator(object):
         self.step_fcn = self._make_step_function()
 
     def go_step(self, x, u, p):
-        scaled_x = zero_one_scale(x, self.x_min, self.x_max)
-        scaled_u = zero_one_scale(u, self.u_min, self.u_max)
-        scaled_p = zero_one_scale(p, self.p_min, self.p_max)
-        scaled_up = torch.cat((scaled_u, scaled_p), dim=-1)
+        # scaled_x = zero_one_scale(x, self.x_min, self.x_max)
+        # scaled_u = zero_one_scale(u, self.u_min, self.u_max)
+        # scaled_p = zero_one_scale(p, self.p_min, self.p_max)
+        # scaled_up = torch.cat((scaled_u, scaled_p), dim=-1)
+        # next_x = self.step_fcn(scaled_x, scaled_up)
+        x_pred = self._ode_solver(x, u, p)
 
-        next_x = self.step_fcn(scaled_x, scaled_up)
-        next_x = zero_one_descale(next_x, self.x_min, self.x_max)
-        return next_x
+        return x_pred
 
     def get_observation(self, x):
         return x
         
     def do_reset(self):
         return self.x_ini, self.u_ini, self.y_ini, self.p_ini
+    
+    def sp_system_dynamics(self, x, u, p):
+        pressure = x[0]
+        h_ref_out = x[1].unsqueeze(-1)
+        m_ref_in = u[0].unsqueeze(-1)
+        m_ref_out = u[1].unsqueeze(-1)
+        h_ref_in = u[2].unsqueeze(-1)
+        m_cool = u[3].unsqueeze(-1)
+        T_cool_in = u[4].unsqueeze(-1)
+        z_tpsh = p[0].unsqueeze(-1)
+        gamma = p[1].unsqueeze(-1)
+        eps_tp = p[2].unsqueeze(-1)
+        eps_sh = p[3].unsqueeze(-1)
+
+        hf = self.Ref.liq_hsat(pressure)
+        hg = self.Ref.vap_hsat(pressure)
+        dhf_dp = self.Ref.liq_dhsatdp(pressure)
+        dhg_dp = self.Ref.vap_dhsatdp(pressure)
+        Df = self.Ref.liq_Dsat(pressure)
+        Dg = self.Ref.vap_Dsat(pressure)
+        dDf_dp = self.Ref.liq_dDsatdp(pressure)
+        dDg_dp = self.Ref.vap_dDsatdp(pressure)
+
+        h_ref_sh = (hg + h_ref_out) / 2.0
+        D_ref_sh = self.Ref.vap_Dph(pressure, h_ref_sh)
+        dDdp_sh = self.Ref.vap_dDdp(pressure, h_ref_sh)
+        dDdh_sh = self.Ref.vap_dDdh(pressure, h_ref_sh)
+        Cp_ref_sh = self.Ref.vap_Cph(pressure, h_ref_sh)
+
+        Cp_cool = self.Cool.Cp(T_cool_in)
+
+        Tsat = self.Ref.Tsat(pressure)
+        T_ref_in_tp = Tsat
+        T_ref_in_sh = Tsat
+
+        mCp_ref_sh = m_ref_out * Cp_ref_sh
+        mCp_cool = m_cool * Cp_cool
+        Q_sh = eps_sh * mCp_ref_sh * (T_cool_in - T_ref_in_sh)
+        T_cool_mid = T_cool_in - Q_sh / mCp_cool
+        Q_tp = eps_tp * mCp_cool * (T_cool_mid - T_ref_in_tp)
+
+        dzdt_mb_coeff = - ((Dg - D_ref_sh) + (Df - Dg) * (1 - gamma))
+        dzdt_const = (m_ref_in - m_ref_out) / dzdt_mb_coeff / self.V_flow
+
+        mass00 = z_tpsh * ((1-gamma)*((hf-hg)*dDf_dp + Df*dhf_dp) + (gamma*Dg*dhg_dp) - 1)
+        mass01 = dzdt_const
+        mass10 = (1-z_tpsh) * ((h_ref_out-hg)*(dDdp_sh + dDdh_sh*dhg_dp/2) + D_ref_sh*dhg_dp/2 - 1)
+        mass11 = (1-z_tpsh) * ((h_ref_out-hg)*dDdh_sh + D_ref_sh) / 2
+        rhs0 = m_ref_in * (h_ref_in - hg) + Q_tp
+        rhs1 = m_ref_out * (hg - h_ref_out) + Q_sh    
+        xdot0 = (mass11 * rhs0 - mass01 * rhs1) / (mass00 * mass11 - mass01 * mass10)
+        xdot1 = (mass00 * rhs1 - mass10 * rhs0) / (mass00 * mass11 - mass01 * mass10)
+        xdot = torch.stack([xdot0, xdot1], dim=-1) / self.V_flow
+        xdot = xdot * self.scale_grad.to(xdot.device)
+
+        return xdot
+    
+    def _inf_system_dynamics(self, x, u, p):
+        pressure = x[:,0].unsqueeze(-1)
+        h_ref_out = x[:,1].unsqueeze(-1)
+        m_ref_in = u[:,0].unsqueeze(-1)
+        m_ref_out = u[:,1].unsqueeze(-1)
+        h_ref_in = u[:,2].unsqueeze(-1)
+        m_cool = u[:,3].unsqueeze(-1)
+        T_cool_in = u[:,4].unsqueeze(-1)
+        z_tpsh = p[:,0].unsqueeze(-1)
+        gamma = p[:,1].unsqueeze(-1)
+        eps_tp = p[:,2].unsqueeze(-1)
+        eps_sh = p[:,3].unsqueeze(-1)
+
+        hf = self.Ref.liq_hsat(pressure)
+        hg = self.Ref.vap_hsat(pressure)
+        dhf_dp = self.Ref.liq_dhsatdp(pressure)
+        dhg_dp = self.Ref.vap_dhsatdp(pressure)
+        Df = self.Ref.liq_Dsat(pressure)
+        Dg = self.Ref.vap_Dsat(pressure)
+        dDf_dp = self.Ref.liq_dDsatdp(pressure)
+        dDg_dp = self.Ref.vap_dDsatdp(pressure)
+
+        h_ref_sh = (hg + h_ref_out) / 2.0
+        D_ref_sh = self.Ref.vap_Dph(pressure, h_ref_sh)
+        dDdp_sh = self.Ref.vap_dDdp(pressure, h_ref_sh)
+        dDdh_sh = self.Ref.vap_dDdh(pressure, h_ref_sh)
+        Cp_ref_sh = self.Ref.vap_Cph(pressure, h_ref_sh)
+
+        Cp_cool = self.Cool.Cp(T_cool_in)
+
+        Tsat = self.Ref.Tsat(pressure)
+        T_ref_in_tp = Tsat
+        T_ref_in_sh = Tsat
+
+        mCp_ref_sh = m_ref_out * Cp_ref_sh
+        mCp_cool = m_cool * Cp_cool
+        Q_sh = eps_sh * mCp_ref_sh * (T_cool_in - T_ref_in_sh)
+        T_cool_mid = T_cool_in - Q_sh / mCp_cool
+        Q_tp = eps_tp * mCp_cool * (T_cool_mid - T_ref_in_tp)
+
+        dzdt_mb_coeff = - ((Dg - D_ref_sh) + (Df - Dg) * (1 - gamma))
+        dzdt_const = (m_ref_in - m_ref_out) / dzdt_mb_coeff / self.V_flow
+
+        mass00 = z_tpsh * ((1-gamma)*((hf-hg)*dDf_dp + Df*dhf_dp) + (gamma*Dg*dhg_dp) - 1)
+        mass01 = dzdt_const
+        mass10 = (1-z_tpsh) * ((h_ref_out-hg)*(dDdp_sh + dDdh_sh*dhg_dp/2) + D_ref_sh*dhg_dp/2 - 1)
+        mass11 = (1-z_tpsh) * ((h_ref_out-hg)*dDdh_sh + D_ref_sh) / 2
+        rhs0 = m_ref_in * (h_ref_in - hg) + Q_tp
+        rhs1 = m_ref_out * (hg - h_ref_out) + Q_sh    
+        xdot0 = (mass11 * rhs0 - mass01 * rhs1) / (mass00 * mass11 - mass01 * mass10)
+        xdot1 = (mass00 * rhs1 - mass10 * rhs0) / (mass00 * mass11 - mass01 * mass10)
+        xdot = torch.stack([xdot0, xdot1], dim=-1) / self.V_flow
+        xdot = xdot * self.scale_grad.to(xdot.device)
+
+        return xdot
     
     def _system_dynamics(self, x, u, p):
         pressure = x[:,0].unsqueeze(-1)
@@ -157,6 +271,26 @@ class Evaporator(object):
             return x + xdot * self.time_interval
         
         return step
+    
+    def _ode_solver(self, x, u, p):
+        # real world scale
+        x, u, p = x.squeeze(0), u.squeeze(0), p.squeeze(0)
+        x_unnorm = Xdenormalizer(x, "unnormalize", "hybrid").unsqueeze(0)
+        u_unnorm = Udenormalizer(u, "unnormalize", "hybrid").unsqueeze(0)
+        p_unnorm = Pdenormalizer(p, "unnormalize", "hybrid").unsqueeze(0)
+
+        # define the ODE function
+        f = lambda t, x: self._inf_system_dynamics(x_unnorm, u_unnorm, p_unnorm)
+        x0 = x_unnorm
+        t = torch.tensor([0.0, 2.0], dtype=torch.float32).to(x.device)
+        x_pred = odeint(f, x0, t, method='rk4')
+
+        x_pred = Xdenormalizer(x_pred, "unnormalize", "hybrid") # real world scale
+        print(x_pred)
+        x_pred = x_pred[-1]
+        print(x_pred)
+        return x_pred
+    
 
 """
 import numpy as np
@@ -348,7 +482,7 @@ class Evaporator(object):
         u_ca = ca.SX.sym("u", self.u_dim)
         p_ca = ca.SX.sym("p", self.p_dim)
         
-        x_d = ut.zero_one_descale(x_ca, self.x_min, self.x_max) # Interpolation
+        x_d = ut.zero_one_descale(x_ca, self.x_min, self.x_max)
         u_d = ut.zero_one_descale(u_ca, self.u_min, self.u_max)
         p_d = ut.zero_one_descale(p_ca, self.p_min, self.p_max)
         

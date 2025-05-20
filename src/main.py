@@ -12,7 +12,7 @@ from statistics import mean
 import importlib
 import yaml
 import json
-from torch.utils.data import TensorDataset, DataLoader, Dataset, Subset
+from torch.utils.data import TensorDataset, DataLoader, Dataset, Subset 
 from sklearn.model_selection import train_test_split
 from utils import MAPEcalculator, MAPEtestcalculator, setseed, inference
 import os
@@ -173,7 +173,7 @@ with torch.no_grad():
         output = model(model_input)
 
         error = MAPEtestcalculator(output.detach(), target.detach(), DESCALER, "total")
-        errors.append(error)    
+        errors.append(error)  
         pred.append(output)
         targets.append(target)
 

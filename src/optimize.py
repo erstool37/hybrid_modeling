@@ -5,19 +5,13 @@ import numpy as np
 import os.path as osp
 import torch.optim as optim
 from tqdm import tqdm
-from statistics import mean
 import importlib
 import datetime
 import yaml
 import time
-import json
-from sklearn.model_selection import train_test_split
-from torch.utils.data import DataLoader, Subset
-from utils import MAPEcalculator, MAPEtestcalculator, setseed, inference, Xdenormalizer, Udenormalizer
 import wandb
 import pandas as pd
-from datasets.Parameterloader import Parameterloader
-from scipy.optimize import minimize
+from utils import  setseed, Xdenormalizer, Udenormalizer, Odenormalizer
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-c", "--config", type=str, required=True, default="configs/config.yaml")
@@ -56,7 +50,6 @@ NOISE = int(cfg["optimize_settings"]["noise"])
 
 today = datetime.datetime.now().strftime("%m%d")
 run_name = f"{NAME}_{today}_{VER}"
-checkpoint = f"{CHECKPOINT}{run_name}.pth"
 
 torch.use_deterministic_algorithms(True)
 torch.backends.mkldnn.deterministic = True
@@ -68,6 +61,7 @@ wandb.init(project=PROJECT, name=run_name, reinit=True, resume="never", config= 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 data_module = importlib.import_module(f"datasets.{DATALOADER}")
 model_module = importlib.import_module(f"models.{MODEL}")
+cost_module = importlib.import_module(f"costs.{COST}")
 cost_module = importlib.import_module(f"costs.{COST}")
 
 data_class = getattr(data_module, DATALOADER)
@@ -86,6 +80,10 @@ model.eval()
 for param in model.parameters():
     param.requires_grad = False
 
+# for convergence calculation
+convergence = 0
+T_cool_out_log = 0
+
 # Simulation start
 print("Simulation start")
 set_temp = TEMP
@@ -95,59 +93,61 @@ for idx in tqdm(range(NUM)):
     u_full = hist[0, -1, 2:7].clone().detach()
     m_cool_in_fixed = u_full[3].item()
     T_cool_in_fixed = u_full[4].item()
-    u_now = torch.tensor([u_full[0].item(), u_full[2].item()], device=u_full.device, requires_grad=True)
+    u_now = torch.tensor([u_full[0].item(), u_full[2].item(), u_full[3].item()], device=u_full.device, requires_grad=True)
 
     cost = cost_class(T_target=set_temp, descaler=DESCALER).to(device)
     optimizer = optim_class([u_now], lr=LR)
-    scheduler = scheduler_class(optimizer, mode='min', factor=0.5, patience=10, threshold=1e-4)
+    scheduler = scheduler_class(optimizer, T_max=MAX_ITER, eta_min=1e-9)
 
     # Optimization loop
     start_time = time.time()
     for step in range(1, MAX_ITER + 1):
         seq = hist.clone()
-        full_u = torch.cat([
-            u_now[0].unsqueeze(0),                         
-            u_now[0].detach().unsqueeze(0),
-            u_now[1].unsqueeze(0),                
-            torch.tensor([m_cool_in_fixed], device=u_now.device),   # m_cool
-            torch.tensor([T_cool_in_fixed], device=u_now.device)])
+        full_u = torch.cat([u_now[0].unsqueeze(0), u_now[0].detach().unsqueeze(0), u_now[1].unsqueeze(0), torch.tensor([m_cool_in_fixed], device=u_now.device), torch.tensor([T_cool_in_fixed], device=u_now.device)])
         seq[0, -1, 2:7] = full_u
         x_pred = model(seq[:, :, :7]).squeeze(0)
-        optimizer.zero_grad()
-        loss = cost(x_pred, seq[0, -1, 7:11], full_u)
-        loss.backward()
 
-        if u_now.grad.norm() < TOL:
-            break
-        scheduler.step(loss)
-        optimizer.step()
-    end_time = time.time()
-
-    u_now = u_now.detach()
-    full_u = torch.cat([
-    u_now[0].unsqueeze(0),  # m_ref_in
-    u_now[0].unsqueeze(0),  # m_ref_out (same as m_ref_in)
-    u_now[1].unsqueeze(0),  # h_ref_in
-    torch.tensor([m_cool_in_fixed], device=u_now.device),
-    torch.tensor([T_cool_in_fixed], device=u_now.device)
-])
-    u_now_unnorm = Udenormalizer(full_u, DESCALER, "optim")
+        if step == 1:
+            p_ref_out_next, h_ref_out_next = Xdenormalizer(x_pred, DESCALER, "optim")
+            wandb.log({"predicted_pressure": p_ref_out_next, "predicted_enthalpy": h_ref_out_next}, step=idx*2) 
     
+        optimizer.zero_grad()
+        loss, T_cool_out_pred = cost(x_pred, seq[0, -1, 7:11], full_u)
+        loss.backward()
+        if loss < TOL:
+            break
+        optimizer.step()
+        scheduler.step()
+
+    end_time = time.time()
+    T_ref_in, T_ref_out, T_cool_out, z_tpsh = Odenormalizer(seq[0, -1, 7:11], DESCALER, "optim")
+    u_now = u_now.detach()
+    full_u = torch.cat([u_now[0].unsqueeze(0), u_now[0].unsqueeze(0), u_now[1].unsqueeze(0), torch.tensor([m_cool_in_fixed], device=u_now.device), torch.tensor([T_cool_in_fixed], device=u_now.device)])
+    u_now_unnorm = Udenormalizer(full_u, DESCALER, "optim")
+
+    # Noise in T_cool_in
     if idx % int(STEP) == 0:
-        u_now_unnorm[4] = TEMP + np.random.uniform(-NOISE, NOISE)
+        u_now_unnorm[4] = (TEMP+3) + np.random.uniform(-NOISE, NOISE)
     u_optim = u_now_unnorm.cpu().numpy().tolist()
-
-    wandb.log({
-        "T_cool_out desired": set_temp,
-        "T_cool_in noise": u_optim[4],
-        "steps": step,
-        "time": end_time - start_time,
-        "m_ref_in_optim": u_optim[0],
-        "h_ref_in_optim": u_optim[2],
-        "m_cool_optim": u_optim[3]
-    })
-
+    improvement = abs(T_cool_out-TEMP)
+    T_cool_out_log = T_cool_out.item()
+    
+    # Convergence check
+    if improvement > 1e-2:
+        convergence += 1
+    else :
+        wandb.log({"convergence step": convergence, "error": improvement}, step=idx*2)
+        convergence = 0
+    
     save_path = osp.join(DATA_ROOT, f"u_optim/u_optim_{(idx+1):04d}.csv")
     pd.DataFrame([u_optim], columns=["m_ref_in", "m_ref_out", "h_ref_in", "m_cool", "T_cool"]).to_csv(save_path, index=False)
+
+    wandb.log({
+        "T_cool_out desired": set_temp, "T_cool_out": T_cool_out, "T_cool_out_pred": T_cool_out_pred.item(), "T_cool_in noise": u_optim[4],
+        "steps": step, "time": end_time - start_time, "total_loss": loss.item(),
+        "m_ref_in_optim": u_optim[0], "h_ref_in_optim": u_optim[2],
+        "T_ref_in": T_ref_in.item(), "T_ref_out": T_ref_out.item(),
+        "zeta_tpsh": z_tpsh.item(),
+    }, step=idx*2)
 
 wandb.finish()

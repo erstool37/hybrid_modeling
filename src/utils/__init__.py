@@ -14,7 +14,11 @@ from .utils import (
     Xdenormalizer,
     Udenormalizer,
     Odenormalizer,
-    Onormalizer
+    Onormalizer,
+    Pdenormalizer,
+    Pnormalizer,
 )
 
 from .setseed import setseed
+
+from .setpointCalculator import setpointCalculator

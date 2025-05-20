@@ -112,6 +112,30 @@ def Odenormalizer(O, descaler, method):
     O_denorm = torch.cat((T_ref_in, T_ref_out, T_cool_out, z_tpsh), dim=0)
     return O_denorm
 
+def Pdenormalizer(P, descaler, method):
+    utils = importlib.import_module("utils")
+    descaler = getattr(utils, descaler)
+    
+    z_tpsh = descaler(P[0], "z_tpsh", method).unsqueeze(-1)
+    gamma = descaler(P[1], "gamma", method).unsqueeze(-1)
+    eps_tp = descaler(P[2], "eps_tp", method).unsqueeze(-1)
+    eps_sh = descaler(P[3], "eps_sh", method).unsqueeze(-1)
+    
+    P_denorm = torch.cat((z_tpsh, gamma, eps_tp, eps_sh), dim=0)
+    return P_denorm
+
+def Pnormalizer(P, scaler, method):
+    utils = importlib.import_module("utils")
+    descaler = getattr(utils, descaler)
+
+    z_tpsh = scaler(P[0], "z_tpsh", method).unsqueeze(-1)
+    gamma = scaler(P[1], "gamma", method).unsqueeze(-1)
+    eps_tp = scaler(P[2], "eps_tp", method).unsqueeze(-1)
+    eps_sh = scaler(P[3], "eps_sh", method).unsqueeze(-1)
+    
+    P_norm = torch.cat((z_tpsh, gamma, eps_tp, eps_sh), dim=0)
+    return P_norm
+
 
 def MAPEcalculator(pred, target, descaler, method):
     utils = importlib.import_module("utils")

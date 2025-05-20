@@ -89,6 +89,11 @@ class Refrigerant(nn.Module):
         Tsat = b / (a - torch.log10(p)) - c
         return Tsat
     
+    def Psat(self, T):
+        a, b, c = self.coeff_Tsat
+        log_p = a - b / (T + c)
+        return 10 ** log_p
+
     def vap_hsat(self, p):
         vap_hsat = torch.bmm(self.coeff_vap_hsat.unsqueeze(0).repeat(len(p),1,1), self.poly8(self.norm_psat(p)).unsqueeze(-1))
         return vap_hsat.squeeze(-1)

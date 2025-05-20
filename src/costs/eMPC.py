@@ -1,10 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import wandb
-import importlib
 from scipy.io import loadmat
-from utils import MAPEcalculator, MAPEtestcalculator, setseed, inference, Xdenormalizer, Udenormalizer, Odenormalizer
+from utils import Xdenormalizer, Udenormalizer, Odenormalizer
 from losses.calculator.prop_cool_evap import Coolant_Evaporator
 from losses.calculator.prop_ref import Refrigerant
 
@@ -25,34 +23,28 @@ class eMPC(nn.Module):
         self.ref = Refrigerant(coeff_ref_data)
 
     def forward(self, x_pred, model_input, u_now):
-        p_ref_out_next, h_ref_out_next = Xdenormalizer(x_pred, self.descaler, "optim")
-        m_ref_in_next, _, h_ref_in_next, m_cool_next, T_cool_in  = Udenormalizer(u_now, self.descaler, "optim")
+        # Unnormalize
+        _, h_ref_out_next = Xdenormalizer(x_pred, self.descaler, "optim")
+        m_ref_in_optim, _, h_ref_in_optim, m_cool, T_cool_in  = Udenormalizer(u_now, self.descaler, "optim")
         T_ref_in, T_ref_out, T_cool_out, z_tpsh = Odenormalizer(model_input, self.descaler, "optim")
         
-        T_cool_out_pred = m_ref_in_next * (h_ref_out_next - h_ref_in_next) / (m_cool_next * self.CE.Cp(T_cool_out.unsqueeze(0).unsqueeze(-1))) + T_cool_in.detach()
+        # T_cool_out calculation
+        Q_ref = m_ref_in_optim * (h_ref_out_next - h_ref_in_optim)
+        C_cool = m_cool * self.CE.Cp((T_cool_out.unsqueeze(0).unsqueeze(-1)+T_cool_in.unsqueeze(0).unsqueeze(-1))/2)
+        T_cool_out_pred =  -1 * Q_ref / C_cool + T_cool_in.detach()
         T_cool_out_pred = T_cool_out_pred.squeeze(0).squeeze(-1)
-        
+
+        # Cost function
+        loss_T_pred = T_cool_out - T_cool_out_pred
         loss_T = F.mse_loss(self.T_target, T_cool_out_pred)
+        # loss_Q = -0.2 * Q_ref
 
-        # h_ref_out_desired = (self.T_target - T_cool_in.detach()) * (m_cool_next.detach() * self.CE.Cp(T_cool_out.unsqueeze(0).unsqueeze(-1))) / m_ref_in_next +  h_ref_in_next
-        # h_ref_out_desired = h_ref_out_desired.squeeze(0).squeeze(-1)
+        # Constaints
+        loss_pos = F.softmax(-m_ref_in_optim.detach(), dim=-1) + F.softmax(-h_ref_in_optim, dim=-1)
+        loss_zeta = F.relu(1.0 - z_tpsh)
+        loss_h = F.relu(180.0 - h_ref_in_optim) + F.relu(h_ref_in_optim - 240.0)
+        loss_m = F.relu(0.01 - m_ref_in_optim) + F.relu(m_ref_in_optim - 0.04)
 
-        # self.ref.liq_hsat(p_ref_out_next.unsqueeze(0).unsqueeze(-1)) * m_ref_in_next 
-        # self.ref.vap_hsat(p_ref_out_next.unsqueeze(0).unsqueeze(-1))
+        loss_total = loss_T + 3 * loss_pos + (loss_zeta + loss_h + loss_m)
 
-        loss_pos = F.softplus(-m_cool_next.detach()) + F.softplus(-h_ref_in_next) + F.softplus(-T_cool_in)
-        # loss_T = F.mse_loss(h_ref_out_next, h_ref_out_desired)
-        
-        loss_total = loss_T + 1000 * loss_pos
-
-        # 1. h_ref 가 extrapolated
-        # 2. 음수값
-        wandb.log({"m_cool_nexst": m_cool_next})
-        wandb.log({"T_cool_out_pred": T_cool_out_pred})
-        wandb.log({"loss_T": loss_T.item()})
-        wandb.log({"loss_total": loss_total.item()})
-        wandb.log({"T_cool_out": T_cool_out.item()})
-        wandb.log({"predicted_pressure": p_ref_out_next})
-        wandb.log({"predicted_enthalpy": h_ref_out_next})
-
-        return loss_total
+        return loss_total, T_cool_out_pred

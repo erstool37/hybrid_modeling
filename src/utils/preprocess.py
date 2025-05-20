@@ -7,6 +7,7 @@ save_dir_train = "src/utils/stats/train.csv"
 save_dir_val = "src/utils/stats/val.csv"
 save_dir_total = "src/utils/stats/total.csv"
 save_dir_test = "src/utils/stats/test.csv"
+save_dir_hybrid = "src/utils/stats/hybrid.csv"
 
 ds = pd.read_csv(dir)
 ds_test = ds = pd.read_csv(test_dir)
