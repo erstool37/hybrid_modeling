@@ -220,3 +220,63 @@ def msle_loss(input, target):
     error = torch.mean((torch.log1p(input) - torch.log1p(target))**2)
 
     return error
+
+def MAPEkerascalculator(pred, target, descaler, method):
+    utils = importlib.import_module("utils")
+    descaler = getattr(utils, descaler)
+    
+    pred_z = descaler(pred[:,0], "z_tpsh", method).unsqueeze(-1)
+    pred_g = descaler(pred[:,1], "gamma", method).unsqueeze(-1)
+    pred_etp = descaler(pred[:,2], "eps_tp", method).unsqueeze(-1)
+    pred_esh = descaler(pred[:,3], "eps_sh", method).unsqueeze(-1)
+
+    target_z = descaler(target[:,2], "z_tpsh", method).unsqueeze(-1)
+    target_g = descaler(target[:,3], "gamma", method).unsqueeze(-1)
+    target_etp = descaler(target[:,4], "eps_tp", method).unsqueeze(-1)
+    target_esh = descaler(target[:,5], "eps_sh", method).unsqueeze(-1)
+
+    loss_mape_z = torch.abs(pred_z - target_z) / target_z * 100
+    loss_mape_g = torch.abs(pred_g - target_g) / target_g * 100
+    loss_mape_etp = torch.abs(pred_etp - target_etp) / target_etp * 100
+    loss_mape_esh = torch.abs(pred_esh - target_esh) / target_esh * 100
+
+    errors = torch.cat((loss_mape_z, loss_mape_g, loss_mape_etp, loss_mape_esh), dim=1)
+    
+    return errors
+
+def inferenceKeras(pred, target, errors, descaler, method, save_dir, run_name):
+    utils = importlib.import_module("utils")
+    descaler = getattr(utils, descaler)
+
+    keys = ["z_tpsh", "gamma", "eps_tp", "eps_sh"]
+
+    pred_z = descaler(pred[:,0], "z_tpsh", method).unsqueeze(-1)
+    pred_g = descaler(pred[:,1], "gamma", method).unsqueeze(-1)
+    pred_etp = descaler(pred[:,2], "eps_tp", method).unsqueeze(-1)
+    pred_esh = descaler(pred[:,3], "eps_sh", method).unsqueeze(-1)
+
+    target_z = descaler(target[:,2], "z_tpsh", method).unsqueeze(-1)
+    target_g = descaler(target[:,3], "gamma", method).unsqueeze(-1)
+    target_etp = descaler(target[:,4], "eps_tp", method).unsqueeze(-1)
+    target_esh = descaler(target[:,5], "eps_sh", method).unsqueeze(-1)
+
+    pred = torch.cat((pred_z, pred_g, pred_etp, pred_esh), dim=1).transpose(0,1).cpu()
+    target = torch.cat((target_z, target_g, target_etp, target_esh), dim=1).transpose(0,1).cpu()
+    errors = errors.transpose(0,1).cpu()
+
+    mape = {}
+    for pred, target, error, key in zip(pred, target, errors, keys):
+        mape[key] = f"{float(error.mean()):.2f}%"
+
+        plt.figure(figsize=(10, 5))
+        plt.plot(pred, label=f"Predicted_{key}", linestyle='-', color='r')
+        plt.plot(target, label=f"True_{key}", linestyle='-', color='b')
+        plt.title(f"Predicted vs True {key}")
+        plt.xlabel("Time")
+        plt.ylabel(f"{key}")
+        plt.legend()
+        plt.grid()
+        plt.savefig(f'{save_dir}/{run_name}_{key}.png', dpi=300, bbox_inches='tight')
+        
+    with open(f"{save_dir}/{run_name}.json", "w") as f:
+            json.dump(mape, f, indent=2)

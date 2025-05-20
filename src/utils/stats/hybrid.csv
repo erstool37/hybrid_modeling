@@ -1,5 +1,5 @@
-﻿,pressure,h_ref_out,m_ref_in,m_ref_out,h_ref_in,m_cool,T_cool_in,T_ref_in,T_ref_out,T_cool_out,z_tpsh,gamma,eps_tp,eps_sh,fval,ef
-mean,,,,,,,,,,,,,,,,
-std,,,,,,,,,,,,,,,,
-max,270,380,0.05,0.05,365,1,10,-9.76799211,-5.837667631,-0.880935482,1,1,1,1,,
-min,100,260,0.01,0.01,163,0.0001,-20,-27.41134523,-27.43509014,-16.6868295,0,0,0,0,,
+﻿,Time,pressure,h_ref_out,m_ref_in,m_ref_out,h_ref_in,m_cool,T_cool_in,T_ref_in,T_ref_out,T_cool_out,z_tpsh,gamma,eps_tp,eps_sh,fval,ef
+mean,,,,,,,,,,,,,,,,,
+std,,,,,,,,,,,,,,,,,
+max,20000,270,380,0.05,0.05,365,1,10,-9.76799211,-5.837667631,-0.880935482,1,1,1,1,,
+min,0,100,260,0.01,0.01,163,0.0001,-20,-27.41134523,-27.43509014,-16.6868295,0,0,0,0,,

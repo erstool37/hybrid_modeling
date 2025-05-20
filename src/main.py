@@ -14,7 +14,7 @@ import yaml
 import json
 from torch.utils.data import TensorDataset, DataLoader, Dataset, Subset 
 from sklearn.model_selection import train_test_split
-from utils import MAPEcalculator, MAPEtestcalculator, setseed, inference
+from utils import MAPEcalculator, MAPEtestcalculator, setseed, inference, MAPEkerascalculator, inferenceKeras
 import os
 
 parser = argparse.ArgumentParser()
@@ -83,23 +83,33 @@ checkpoint = f"{CHECKPOINT}{run_name}.pth"
 wandb.init(project=PROJECT, name=run_name, reinit=True, resume="never", config= config)
 
 # DATASET
-train_ds = data_class(dir = PARA_DIR, sequence_length = SEQ_LEN, method = 'train', scaler=SCALER)
+train_ds = data_class(dir = PARA_DIR, sequence_length = SEQ_LEN, method = 'total', scaler=SCALER)
 val_ds = data_class(dir = PARA_DIR, sequence_length = SEQ_LEN, method = 'total', scaler=SCALER)
 test_ds = data_class(dir = TEST_DIR, sequence_length = SEQ_LEN, method = 'test', scaler=SCALER)
+val_keras_ds = data_class(dir = PARA_DIR, sequence_length = 30, method = 'total', scaler=SCALER)
+test_keras_ds = data_class(dir = TEST_DIR, sequence_length = 30, method = 'test', scaler=SCALER)
 
 indices = np.arange(len(train_ds))
 indices2 = np.arange(len(test_ds))
+indices3 = np.arange(len(val_keras_ds))
+indices4 = np.arange(len(test_keras_ds))
 
 train_idx, val_idx = train_test_split(indices, test_size=TEST_SIZE, shuffle=False)
-dummy_idx, test_idx = train_test_split(indices2, test_size=0.1, shuffle=False)
+_, test_idx = train_test_split(indices2, test_size=0.2, shuffle=False)
+_, val_keras_idx = train_test_split(indices3, test_size=0.2, shuffle=False)
+_, test_keras_idx = train_test_split(indices4, test_size=0.2, shuffle=False)
 
 train_ds = Subset(train_ds, train_idx)
 val_ds = Subset(val_ds, val_idx)
 test_ds = Subset(test_ds, test_idx)
+val_keras_ds = Subset(val_keras_ds, val_keras_idx)
+test_keras_ds = Subset(test_keras_ds, test_keras_idx)
 
 train_dl = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=0, pin_memory=PIN_MEMORY)
 val_dl = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=0, pin_memory=PIN_MEMORY)
 test_dl = DataLoader(test_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=0, pin_memory=PIN_MEMORY)
+val_keras_dl = DataLoader(val_keras_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=0, pin_memory=PIN_MEMORY)
+test_keras_dl = DataLoader(test_keras_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=0, pin_memory=PIN_MEMORY)
 
 # INITIALIZE
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -107,7 +117,7 @@ model = model_class(input_size=7, hidden_dim=HIDDEN_DIM, num_layers=NUM_LAYERS, 
 criterion = criterion_class(time_step=TIME_STEP, w_res=W_RES, w_theta=W_THETA, w_ode=W_ODE, descaler=DESCALER)
 optimizer = optim_class(model.parameters(), lr=LR, weight_decay=W_DECAY)
 scheduler = scheduler_class(optimizer, T_max=NUM_EPOCHS, eta_min=ETA_MIN)
-
+"""
 # TRAINING
 wandb.watch(model, criterion, log="all", log_freq=5)
 best_val_loss = float("inf")
@@ -159,16 +169,17 @@ for epoch in range(NUM_EPOCHS):
     print(f"Epoch {epoch+1}/{NUM_EPOCHS} results - Train Loss: {mean_train_loss:.4f} Validation Loss: {mean_val_loss:.4f} - LR: {current_lr:.8f}")
 wandb.finish()
 torch.save(model.state_dict(), checkpoint)
-
-
+"""
+"""
 # Inference
+model = model_class(input_size=7, hidden_dim=HIDDEN_DIM, num_layers=NUM_LAYERS, output_size=6).to(device)
 model.load_state_dict(torch.load(checkpoint, map_location=device))
 model.eval()
 
 # Inference loop
 pred, targets, errors = [], [], []
 with torch.no_grad():
-    for model_input, target in tqdm(val_dl):
+    for model_input, target in tqdm(test_dl):
         model_input, target = model_input.to(device), target.to(device)
         output = model(model_input)
 
@@ -181,6 +192,27 @@ errors = torch.cat(errors, dim=0)
 pred = torch.cat(pred, dim=0)
 targets = torch.cat(targets, dim=0)
 
-keys = ["pressure", "enthalpy", "zeta"]
-
 inference(pred, targets, errors, DESCALER, "total", INF_DIR, run_name)
+"""
+
+from models.HybridLSTMModel import HybridLSTMModel
+model = HybridLSTMModel(input_size=7, output_size=4, lookback=30).to(device)
+model.load_state_dict(torch.load("src/weights/hybrid_keras_LSTM.pth"))
+
+pred, targets, errors = [], [], []
+with torch.no_grad():
+    for model_input, target in tqdm(val_keras_dl):
+        model_input, target = model_input.to(device), target.to(device)
+        output = model(model_input)
+        output = output[:, -1, :]
+
+        error = MAPEkerascalculator(output.detach(), target.detach(), DESCALER, "total")
+        errors.append(error)  
+        pred.append(output)
+        targets.append(target)
+
+errors = torch.cat(errors, dim=0)
+pred = torch.cat(pred, dim=0)
+targets = torch.cat(targets, dim=0)
+
+inferenceKeras(pred, targets, errors, DESCALER, "total", INF_DIR, "keras")
