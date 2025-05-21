@@ -44,4 +44,8 @@ tqdm
 matplotlib
 matlab.engine
 opencv-python-headless
-torchdiffeq
+torchdiffeqs
+silence_tensorflow
+keras
+casadi
+tensorflow

@@ -2,12 +2,12 @@
 # check if optimizing or PINN training
 
 project: "heat exchanger"
-name: "best_run_selection"
-version: vF
+name: "best_run_selection_30"
+version: v1
 
 train_settings:
-  batch_size : 8192
-  num_epochs : 30
+  batch_size : 4096
+  num_epochs : 1000
   num_workers : 16
   pin_memory : False
   seed : 37
@@ -15,7 +15,7 @@ train_settings:
 preprocess:
   scaler : normalize
   descaler : unnormalize
-  sequence_length : 10
+  sequence_length : 30
   time_step : 2
   test_size : 0.2
   random_state : 37
@@ -40,7 +40,7 @@ optimizer:
   lr: 1e-4
   eta_min : 1e-9
   weight_decay: 0
-  patience : 5
+  patience : 20
 
 directories:
   checkpoint : "src/weights/"
