@@ -93,9 +93,8 @@ def plot_convergence(csv_path):
     fig.tight_layout()
     fig.savefig("NtoT.png", dpi=300)
     plt.close()
-
 plot_convergence("savefiles/NTS.csv")
-"""
+
 
 def plot_T(csv_path):
     data = pd.read_csv(csv_path)
@@ -121,5 +120,28 @@ def plot_T(csv_path):
     ax.legend(prop=font_prop, fontsize=10)
     fig.savefig("T_cool.png", dpi=300)
     plt.close()
-
 plot_T("savefiles/T_cool.csv")
+"""
+def plot_time(csv_path):
+    data = pd.read_csv(csv_path)
+
+    time = data["time"].to_numpy()
+    value = data["zeta"].to_numpy()
+
+    fig, ax = plt.subplots(figsize=(7, 3))
+    ax.plot(time, value, 'k-', label='Simulation')
+
+    ax.set_xlabel("Time", fontproperties=font_prop)
+    ax.set_ylabel("Zeta", fontproperties=font_prop)
+    ax.set_title("Zeta", fontproperties=font_prop)
+    ax.xaxis.set_major_locator(MultipleLocator(200))
+    ax.yaxis.set_major_locator(MultipleLocator(0.2))
+    ax.tick_params(labelsize=8)
+    ax.grid(True, linewidth=0.5)
+    for label in ax.get_xticklabels() + ax.get_yticklabels():
+        label.set_fontproperties(font_prop)
+    fig.tight_layout()
+    fig.savefig("zeta.png", dpi=300)
+    plt.close()
+    
+plot_time("savefiles/zeta.csv")
