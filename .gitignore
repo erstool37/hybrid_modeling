@@ -5,3 +5,5 @@ wandb/
 **/__pycache__/
 src/inference/*
 src/weights/*
+KERASTEST/
+savefiles/

@@ -14,7 +14,7 @@ import yaml
 import json
 from torch.utils.data import TensorDataset, DataLoader, Dataset, Subset 
 from sklearn.model_selection import train_test_split
-from utils import MAPEcalculator, MAPEtestcalculator, setseed, inference, MAPEkerascalculator, inferenceKeras
+from utils import MAPEcalculator, MAPEtestcalculator, setseed, inference, MAPEkerascalculator, inferenceKeras, Xdenormalizer
 import os
 
 parser = argparse.ArgumentParser()
@@ -79,6 +79,7 @@ scheduler_class = getattr(optim.lr_scheduler, SCHEDULER)
 today = datetime.datetime.now().strftime("%m%d")
 run_name = f"{NAME}_{today}_{VER}"
 checkpoint = f"{CHECKPOINT}{run_name}.pth"
+print(checkpoint)
 
 wandb.init(project=PROJECT, name=run_name, reinit=True, resume="never", config= config)
 
@@ -95,13 +96,13 @@ indices3 = np.arange(len(val_keras_ds))
 indices4 = np.arange(len(test_keras_ds))
 
 train_idx, val_idx = train_test_split(indices, test_size=TEST_SIZE, shuffle=False)
-_, test_idx = train_test_split(indices2, test_size=0.2, shuffle=False)
+_, test_idx = train_test_split(indices2, test_size=0.95, shuffle=False)
 _, val_keras_idx = train_test_split(indices3, test_size=0.2, shuffle=False)
 _, test_keras_idx = train_test_split(indices4, test_size=0.2, shuffle=False)
 
 train_ds = Subset(train_ds, train_idx)
-val_ds = Subset(val_ds, val_idx)
-test_ds = Subset(test_ds, test_idx)
+# val_ds = Subset(val_ds, val_idx)
+# test_ds = Subset(test_ds, test_idx)
 val_keras_ds = Subset(val_keras_ds, val_keras_idx)
 test_keras_ds = Subset(test_keras_ds, test_keras_idx)
 
@@ -193,8 +194,18 @@ errors = torch.cat(errors, dim=0)
 pred = torch.cat(pred, dim=0)
 targets = torch.cat(targets, dim=0)
 
-inference(pred, targets, errors, DESCALER, "total", INF_DIR, run_name)
+y_traj_pinn = pred[:, :2]
+save_list = []
+for b in range(y_traj_pinn.shape[0]):
+    save = Xdenormalizer(y_traj_pinn[b,:2], DESCALER, "total").cpu().numpy()
+    save_list.append(save)
+save_array = np.array(save_list) 
+print(save_array.shape)
+np.savetxt("pinn_total.csv", save_array, delimiter=",", header="pressure,enthalpy", comments='')
 
+# inference(pred, targets, errors, DESCALER, "total", INF_DIR, run_name)
+
+"""
 # Hybrid Inference
 from models.HybridLSTMModel import HybridLSTMModel
 hybrid_model = HybridLSTMModel(input_size=7, output_size=4, lookback=30).to(device)
@@ -217,3 +228,4 @@ pred = torch.cat(pred, dim=0)
 targets = torch.cat(targets, dim=0)
 
 inferenceKeras(pred, targets, errors, DESCALER, "total", INF_DIR, "keras")
+"""

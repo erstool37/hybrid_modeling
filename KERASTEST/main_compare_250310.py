@@ -230,6 +230,70 @@ def plot_result(start, end, y_true, y_traj_mb, y_traj_bb, y_traj_hyb, p_true, p_
     
     return fig_traj, fig_param
 
+def plot_result_pinn(start, end, y_true, y_traj_mb, y_traj_bb, y_traj_hyb, p_true, p_traj_hyb, u_traj, y_traj_pinn):
+    time = np.arange(start, end+1) * 2
+
+    # rcParams
+    plt.rcParams["font.family"] = "Times New Roman"
+    plt.rcParams["font.size"] = 11
+
+    # Labels
+    ylabels = Evap_data.y_label
+    plabels = Evap_data.p_label
+    ulabels = Evap_data.u_label[1:]
+    ulabels[0] = r"$\dot{m}_{ref} [kg/s]$"
+
+    # Alphabetical labels
+    alphabet = ["(a)", "(b)", "(c)", "(d)", "(e)", "(f)"]
+
+    # Figure 1. trajectories
+    fig_traj = plt.figure(figsize=(7, 12))
+    gs_traj = fig_traj.add_gridspec(4, 2)
+
+    for k in range(Evap_data.y_dim):
+        ax = fig_traj.add_subplot(gs_traj[k, :])
+        ax.plot(time, y_true[start:end+1, k], linestyle="-", linewidth=1, color="#555555", label="True")
+        # ax.plot(time, y_traj_mb[start:end+1, k], linestyle="-", linewidth=1, color="#60a860", label="MB")
+        ax.plot(time, y_traj_bb[start:end+1, k], linestyle="-", linewidth=1, color="#5461f0", label="BB")
+        ax.plot(time, y_traj_hyb[start:end+1, k], linestyle="-", linewidth=1, color="#ff4d4d", label="Hybrid")
+        ax.plot(time, y_traj_pinn[start:end+1, k], linestyle="-", linewidth=1, color="#60a860", label="PINN")
+        ax.set_xlim([start*2, end*2])
+        ax.set_xlabel("Time (sec)", fontsize=13)
+        ax.set_ylabel(ylabels[k], fontsize=13)
+        ax.set_xticks([kkk for kkk in range(start*2, end*2+1, int((end-start)*2/5))])
+        ax.set_title(alphabet[k], fontsize=13)
+        ax.grid(linewidth=0.5)
+
+    for w in range(Evap_data.u_dim-1):
+        ax = fig_traj.add_subplot(gs_traj[w//2+2, w%2])
+        ax.plot(time, u_traj[start:end+1, w], linestyle="-", linewidth=1, color="#555555")
+        ax.set_xlim([start*2, end*2])
+        ax.set_xlabel("Time (sec)", fontsize=13)
+        ax.set_ylabel(ulabels[w], fontsize=13)
+        ax.set_xticks([kkk for kkk in range(start*2, end*2+1, int((end-start)*2/5))])
+        ax.set_title(alphabet[w+2], fontsize=13)
+        ax.grid(linewidth=0.5)
+
+    fig_traj.suptitle("System variables trajectory", fontsize=13)
+    fig_traj.tight_layout()
+
+    # Figure 2. parameters
+    fig_param, axes_param = plt.subplots(2, 2, figsize=(7, 5))
+    for m in range(Evap_data.p_dim):
+        axes_param[m//2, m%2].plot(time-2, p_true[start-1:end, m], linestyle="-", linewidth=1, color="#555555", label="True")
+        axes_param[m//2, m%2].plot(time-2, p_traj_hyb[start-1:end, m], linestyle="-", linewidth=1, color="#ff4d4d", label="Hybrid")
+        # axes_param[m//2, m%2].plot(time-2, p_traj_pinn[start-1:end, m], linestyle="-", linewidth=1, color="#ff9900", label="PINN")
+        axes_param[m//2, m%2].set_xlim([start*2, end*2])
+        axes_param[m//2, m%2].set_xlabel("Time (sec)", fontsize=13)
+        axes_param[m//2, m%2].set_ylabel(plabels[m], fontsize=13)
+        axes_param[m//2, m%2].set_xticks([kkk for kkk in range(start*2, end*2+1, int((end-start)*2/5))])
+        axes_param[m//2, m%2].set_title(alphabet[m], fontsize=13)
+        axes_param[m//2, m%2].grid(linewidth=0.5)
+
+    fig_param.suptitle("System parameters", fontsize=13)
+    fig_param.tight_layout()
+
+    return fig_traj, fig_param
 
 # %% Main
 if __name__ == "__main__":
@@ -373,16 +437,25 @@ if __name__ == "__main__":
     u_true = u_true[lookback:-lookforward, :]
     y_true = y_true[lookback:-lookforward, :]    
     p_true = p_true[lookback:-lookforward, :]
-    
-    fig_traj, fig_param = \
-        plot_result(5000, 5500, y_true, y_traj_mb, y_traj_bb, y_traj_hyb, p_true, p_traj_hyb, u_true)
-    average_calc_time_mb = np.mean(calc_time_mb[calc_time_mb > 1e-6])
-    average_calc_time_bb = np.mean(calc_time_bb[calc_time_bb > 1e-6])
-    average_calc_time_hyb = np.mean(calc_time_hyb[calc_time_hyb > 1e-6])
 
-    fig_traj.savefig("saved_figures_evap/Trajectory.png")
-    fig_param.savefig("saved_figures_evap/Parameters.png")
+    # Save black-box model predictions
+    # Save black-box model predictions to CSV
+    np.savetxt("y_traj_bb.csv", y_traj_bb, delimiter=",", header="pressure,enthalpy", comments='')
+    print("Black-box prediction shape:", y_traj_bb.shape)
+
+    # Save hybrid model predictions to CSV
+    np.savetxt("y_traj_hyb.csv", y_traj_hyb, delimiter=",", header="pressure,enthalpy", comments='')
+    print("Hybrid model prediction shape:", y_traj_hyb.shape)
+
+    # fig_traj, fig_param = \
+    #     plot_result_pinn(0, safe_end, y_true, y_traj_mb, y_traj_bb, y_traj_hyb, p_true, p_traj_hyb, u_true, y_traj_pinn)
+    # average_calc_time_mb = np.mean(calc_time_mb[calc_time_mb > 1e-6])
+    # average_calc_time_bb = np.mean(calc_time_bb[calc_time_bb > 1e-6])
+    # average_calc_time_hyb = np.mean(calc_time_hyb[calc_time_hyb > 1e-6])
+
+    # fig_traj.savefig("saved_figures_evap/Trajectory.png")
+    # fig_param.savefig("saved_figures_evap/Parameters.png")
     
-    mape_mb = np.sum(np.abs(y_true - y_traj_mb[:-1, :]) / y_true, axis=0) * 100 / (y_true.shape[0])
-    mape_hyb = np.sum(np.abs(y_true - y_traj_hyb[:-1, :]) / y_true, axis=0) * 100 / (y_true.shape[0])
-    mape_bb = np.sum(np.abs(y_true - y_traj_bb[:-1, :]) / y_true, axis=0) * 100 / (y_true.shape[0])
+    # mape_mb = np.sum(np.abs(y_true - y_traj_mb[:-1, :]) / y_true, axis=0) * 100 / (y_true.shape[0])
+    # mape_hyb = np.sum(np.abs(y_true - y_traj_hyb[:-1, :]) / y_true, axis=0) * 100 / (y_true.shape[0])
+    # mape_bb = np.sum(np.abs(y_true - y_traj_bb[:-1, :]) / y_true, axis=0) * 100 / (y_true.shape[0])
