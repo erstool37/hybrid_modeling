@@ -119,7 +119,6 @@ criterion = criterion_class(time_step=TIME_STEP, w_res=W_RES, w_theta=W_THETA, w
 optimizer = optim_class(model.parameters(), lr=LR, weight_decay=W_DECAY)
 scheduler = scheduler_class(optimizer, T_max=NUM_EPOCHS, eta_min=ETA_MIN)
 
-"""
 # TRAINING
 wandb.watch(model, criterion, log="all", log_freq=5)
 best_val_loss = float("inf")
@@ -171,7 +170,6 @@ for epoch in range(NUM_EPOCHS):
     print(f"Epoch {epoch+1}/{NUM_EPOCHS} results - Train Loss: {mean_train_loss:.4f} Validation Loss: {mean_val_loss:.4f} - LR: {current_lr:.8f}")
 wandb.finish()
 torch.save(model.state_dict(), checkpoint)
-"""
 
 # Inference
 model = model_class(input_size=7, hidden_dim=HIDDEN_DIM, num_layers=NUM_LAYERS, output_size=6).to(device)
@@ -194,6 +192,8 @@ errors = torch.cat(errors, dim=0)
 pred = torch.cat(pred, dim=0)
 targets = torch.cat(targets, dim=0)
 
+inference(pred, targets, errors, DESCALER, "total", INF_DIR, run_name)
+
 y_traj_pinn = pred[:, :2]
 save_list = []
 for b in range(y_traj_pinn.shape[0]):
@@ -203,9 +203,8 @@ save_array = np.array(save_list)
 print(save_array.shape)
 np.savetxt("pinn_total.csv", save_array, delimiter=",", header="pressure,enthalpy", comments='')
 
-# inference(pred, targets, errors, DESCALER, "total", INF_DIR, run_name)
-
 """
+
 # Hybrid Inference
 from models.HybridLSTMModel import HybridLSTMModel
 hybrid_model = HybridLSTMModel(input_size=7, output_size=4, lookback=30).to(device)

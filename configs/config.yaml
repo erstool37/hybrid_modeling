@@ -2,8 +2,8 @@
 # check if optimizing or PINN training
 
 project: "heat exchanger"
-name: "best_run_selection_30"
-version: v1
+name: "termprojectGRU"
+version: v0
 
 train_settings:
   batch_size : 4096
@@ -70,7 +70,7 @@ optimization :
     step : 40 # step until desired temperature of T_ref_in changes
 
   model:
-    model_class : lstmPINN
+    model_class : GRU
     dataloader : Realtimeloader
     lstm_size : 512
     lstm_layers : 4
