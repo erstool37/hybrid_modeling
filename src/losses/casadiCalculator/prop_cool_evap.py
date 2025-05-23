@@ -1,6 +1,6 @@
 import casadi as ca
 
-class Coolant_evaporator(object):
+class Coolant_Evaporator(object):
     def __init__(self, coefficients):
         x = ca.SX.sym("x", 1)
         

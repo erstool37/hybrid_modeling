@@ -18,7 +18,6 @@ from losses.calculator.prop_cool_evap import Coolant_Evaporator
 from losses.casadiCalculator.sys_evap_1008ver import Evaporator as ca_Evaporator
 from losses.casadiCalculator.prop_ref import Refrigerant as ca_Refrigerant
 from losses.casadiCalculator.prop_cool_evap import Coolant_Evaporator as ca_Coolant_Evaporator
-
 from utils import setseed, Xdenormalizer, Udenormalizer, Odenormalizer, setpointCalculator, Pdenormalizer
 from models.HybridLSTMModel import HybridLSTMModel
 from datasets.Realtimeloader import Realtimeloader
@@ -57,7 +56,7 @@ torch.backends.mkldnn.deterministic = True
 torch.backends.mkldnn.benchmark = False
 setseed(SEED)
 
-wandb.init(project=PROJECT, name=NAME, reinit=True, resume="never")
+# wandb.init(project=PROJECT, name=NAME, reinit=True, resume="never")
 
 # Model setup
 dataset = Realtimeloader(dir="../../MATLAB/SIMULINK/optimization", seq_len=30, scaler=SCALER)
@@ -98,13 +97,12 @@ for idx in tqdm(range(NUM)):
     others = next_data[:,:,-7:]
 
     # set point calculation
-    x = model_input[:,-1,:2].squeeze(1).squeeze(0).cpu().numpy()
-    u = model_input[:,-1,2:7].squeeze(1).squeeze(0).cpu().numpy()
-    p = model(model_input).cpu().numpy()
-    
-    x_sp, u_sp = setpointCalculator(ca_Evap.go_step, x, u, p, DESCALER, Cool_evap.Cp(TEMP), TEMP, tol=1e-4, method="SLSQP")
+    x = model_input[:,-1,:2].squeeze(1).squeeze(0)
+    u = model_input[:,-1,2:7].squeeze(1).squeeze(0)
 
+    temp = torch.tensor(TEMP).unsqueeze(0).unsqueeze(0)
 
+    x_sp, u_sp = setpointCalculator(ca_Evap.go_step, x, u, model, DESCALER, Cool_evap.Cp(temp), TEMP, tol=1e-4, method="SLSQP")
 
     u = model_input[:,-1,2:7].unsqueeze(1)
     u_horizon = u.expand(-1, 5, -1) # [B, 5, 5]
