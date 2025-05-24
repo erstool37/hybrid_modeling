@@ -99,50 +99,71 @@ for idx in tqdm(range(NUM)):
     # set point calculation
     x = model_input[:,-1,:2].squeeze(1).squeeze(0)
     u = model_input[:,-1,2:7].squeeze(1).squeeze(0)
-
     temp = torch.tensor(TEMP).unsqueeze(0).unsqueeze(0)
-
     x_sp, u_sp = setpointCalculator(ca_Evap.go_step, x, u, model, DESCALER, Cool_evap.Cp(temp), TEMP, tol=1e-4, method="SLSQP")
+    x_sp = torch.tensor(x_sp, dtype=torch.float32, device=device)
+    u_sp = torch.tensor(u_sp, dtype=torch.float32, device=device)
 
+    # optimizer, sheduler setup
     u = model_input[:,-1,2:7].unsqueeze(1)
     u_horizon = u.expand(-1, 5, -1) # [B, 5, 5]
     u_optimize = torch.stack([u_horizon[:,:,0], u_horizon[:,:,2]]).unsqueeze(1) # take m_ref_in and h_ref_in for optimization
     u_optimize.requires_grad = True
     optimizer = torch.optim.LBFGS([u_optimize], lr=LR, max_iter=100)
     scheduler = scheduler_class(optimizer, T_max=MAX_ITER, eta_min=1e-9)
-    cost = cost_class(T_target=set_temp, descaler=DESCALER).to(device)
 
-    Cp_cool = Cool_evap.Cp(torch.tensor(TEMP).unsqueeze(0).unsqueeze(0))
+    nx, nu = 2, 5
+    
+    Q = torch.eye(nx,  device=device, dtype=torch.float32)
+    P = torch.eye(nx,  device=device, dtype=torch.float32)
+    R = torch.eye(nu,  device=device, dtype=torch.float32)
+
+    cost = cost_class(Q, R, P).to(device)
 
     # Optimization loop
     for step in tqdm(range(NUM)):
         # stack horizon
+        x_pred_lst = []
+        p_pred_lst = []
+        x = model_input[:,-1,:2].squeeze(1).squeeze(0)
+        x = Xdenormalizer(x, DESCALER, "optim")
+
+        u = u.squeeze(0).squeeze(0)
+        u = Udenormalizer(u, DESCALER, "optim")
+
+        input_seq = model_input
         for idx in range(HORIZON):
-            x = model_input[:,-1,:2].squeeze(1).squeeze(0)
-            u = u.squeeze(0).squeeze(0)
-            p = model(model_input)
-            p = p[:,-1,:].squeeze(0)
-            
-            x = Xdenormalizer(x, DESCALER, "optim")
-            u = Udenormalizer(u, DESCALER, "optim")
-            p = Pdenormalizer(p, DESCALER, "optim")
-            
-            x_pred = Evap.go_step(x, u, p).permute(1, 0)
-            # print("1", x_pred)
-            x_pred_lst.append(x_pred)
-            p_pred_lst.append(p.unsqueeze(0))
-        x_horizon = torch.stack(x_pred_lst, dim=1) # [B, 5, 2]
+            u_step = u.squeeze(0).squeeze(0)              # → (5,)
+            u_step = Udenormalizer(u_step, DESCALER, "optim")  # → (5,) real units
+
+            p_pred = model(input_seq)                     # (1, L, ?)
+            p_pred = p_pred[:, -1, :].squeeze(0)          # → (num_p,)
+            p_pred = Pdenormalizer(p_pred, DESCALER, "optim")
+            x = Evap.go_step(x, u_step, p_pred)           # → (2,) real units
+            print(x)
+            # record
+            x_pred_lst.append(x)                          # list of (2,) tensors
+            p_pred_lst.append(p_pred.unsqueeze(0))        # list of (1, num_p) tensors
+            x_norm = Xdenormalizer(x, DESCALER, "optim")  # → (2,)
+            if x_norm.dim() == 1:
+                x_norm = x_norm.unsqueeze(0)               # → (1,2)
+
+            new_frame = torch.zeros((1, 1, 7),
+                                    device=input_seq.device,
+                                    dtype=input_seq.dtype)
+            new_frame[0, 0, :2] = x_norm                   # place normalized x
+
+            # drop the oldest timestep, append the new one
+            input_seq = torch.cat([input_seq[:, 1:, :], new_frame], dim=1)
+        
+        x_horizon = torch.stack(x_pred_lst, dim=0) # [B, 5, 2]
         p_horizon = torch.stack(p_pred_lst, dim=1) # [B, 5, 4]
 
         m_cool_in_fixed = u_horizon[:, 0, 3].item()
         T_cool_in_fixed = u_horizon[:, 0, 4].item()
-
-        # setpoint calculation :  x, u, p만 주고, setpoint 게산
-        x_sp, u_sp = setpointCalculator(Evap.sp_system_dynamics, x_horizon, u_horizon, p_horizon, DESCALER, Cp_cool, TEMP, tol=1e-4, method="SLSQP")
-        print(x_sp, u_sp)
         
         # loss calculation
-        loss = cost(x_horizon, u_horizon, p_horizon)
+        loss = cost(x_horizon, u_horizon, p_horizon, x_sp, u_sp)
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()

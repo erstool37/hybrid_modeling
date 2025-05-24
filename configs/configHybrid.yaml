@@ -28,4 +28,4 @@ directories:
   checkpoint : "src/weights/best_run_selection_0512_vF.pth"
   data_root : "../../MATLAB/SIMULINK/optimization"
 
-cost: eMPC
+cost: Quad

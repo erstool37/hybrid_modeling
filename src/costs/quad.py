@@ -1,62 +1,56 @@
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import wandb
-import importlib
-from scipy.io import loadmat
-from utils import MAPEcalculator, MAPEtestcalculator, setseed, inference, Xdenormalizer, Udenormalizer, Odenormalizer
-from losses.calculator.prop_cool_evap import Coolant_Evaporator
-from losses.calculator.prop_ref import Refrigerant
+import casadi as ca
 
-class eMPC(nn.Module):
-    def __init__(self, T_target, descaler):
-        super(eMPC, self).__init__()
-        self.T_target = torch.tensor(T_target)
-        self.descaler = descaler
+def make_mpc_solver(f_step, nx, nu, Np, Nc, Q, R, P):
+    x_min = ca.DM([100.0, 270.0])
+    x_max = ca.DM([360.0, 380.0])
+    u_min = ca.DM([0.01, 0.01, 163.0, 0.0001, -20.0])
+    u_max = ca.DM([0.05, 0.05, 365.0, 1.0, 10.0])
 
-        coeff_cool_evap_data = loadmat("src/losses/calculator/coefficients_cool_evap.mat")
-        coeff_cool_evap_data = coeff_cool_evap_data["coefficients_cool_evap"]
-        coeff_cool_evap_data = {field: coeff_cool_evap_data[field][0, 0] for field in coeff_cool_evap_data.dtype.names}
-        self.CE = Coolant_Evaporator(coeff_cool_evap_data)
+    # Decision variables
+    X = ca.MX.sym('X', nx, Np+1)
+    U = ca.MX.sym('U', nu, Nc)
 
-        coeff_ref_data = loadmat("src/losses/calculator/coefficients_ref.mat")
-        coeff_ref_data = coeff_ref_data["coeff_ref"]
-        coeff_ref_data = {field: coeff_ref_data[field][0, 0] for field in coeff_ref_data.dtype.names}
-        self.ref = Refrigerant(coeff_ref_data)
+    # Parameters
+    X0  = ca.MX.sym('X0', nx)
+    Xsp = ca.MX.sym('Xsp', nx)
+    Usp = ca.MX.sym('Usp', nu)
 
-    def forward(self, x_horizon, u_horizon, p_horizon, others):
-        for idx in range(x_horizon.shape[1]):
-            x_horizon[:, idx, :] = Xdenormalizer(x_horizon[:, idx, :], self.descaler, "optim")
-            u_horizon[:, idx, :] = Udenormalizer(u_horizon[:, idx, :], self.descaler, "optim")
-            p_horizon[:, idx, :] = Odenormalizer(p_horizon[:, idx, :], self.descaler, "optim")
+    g = []
+    J = 0
+    # Initial state constraint
+    g.append(X[:, 0] - X0)
 
-        T_ref_in = others[:,7]
-        T_ref_out = others[:,8]
-        T_cool_out = others[:,9]
-        T_cool_in = u_horizon[:,0,4].squeeze(1)
-        m_cool_in = u_horizon[:,0,3].squeeze(1)
-        m_ref_in = u_horizon[:,0,0].squeeze(1)
-        h_ref_in = u_horizon[:,0,2].squeeze(1)
-        
-        # setpoint calculation
-        p_ref_out_sp = 
-        h_ref_out_sp = (self.T_target - T_cool_in) * (m_cool_in * self.CE.Cp(T_cool_out.unsqueeze(0).unsqueeze(-1))) / m_ref_in + h_ref_in
+    # Build dynamics and stage cost
+    for k in range(Nc):
+        xk = X[:, k]
+        uk = U[:, k]
+        x_next = f_step(xk, uk)
+        g.append(X[:, k+1] - x_next)
+        dx = xk - Xsp
+        du = uk - Usp
+        J += ca.dot(dx, Q @ dx) + ca.dot(du, R @ du)
 
-        p_sp = self.ref.Psat(T_ref_out)
-        x_sp = torch.stack([p_sp, h_ref_out_sp], dim=1).to(x_horizon.device).view()
+    # Terminal cost
+    dxN = X[:, Np] - Xsp
+    J += ca.dot(dxN, P @ dxN)
 
-        u_sp = 
+    # Pack decision variables and constraints
+    w = ca.vertcat(ca.reshape(X, -1, 1), ca.reshape(U, -1, 1))
+    g = ca.vertcat(*g)
+    nlp = {'x': w, 'f': J, 'g': g}
+    solver = ca.nlpsol('solver', 'ipopt', nlp)
 
-        # loss setting
-        loss_x = F.mse_loss(x_horizon[:,:,:4], x_sp[:,:,:4])
-        loss_u = F.mse_loss(u_horizon, u_sp)
-        loss_final = F.mse_loss(x_horizon[:,:,4], x_sp[:,:,4])
+    # Build box bounds for states and controls
+    lbx, ubx = [], []
+    for _ in range(Np+1):
+        lbx += list(x_min)
+        ubx += list(x_max)
+    for _ in range(Nc):
+        lbx += list(u_min)
+        ubx += list(u_max)
 
-        total_loss = 2 * loss_x + 2 * loss_u + 10 * loss_final
+    # Equality constraints all zero
+    lbg = [0] * ((Nc + 1) * nx)
+    ubg = [0] * ((Nc + 1) * nx)
 
-        wandb.log({"loss_x": loss_x})
-        wandb.log({"loss_u": loss_u})
-        wandb.log({"loss_final": loss_final})
-        wandb.log({"total_loss": total_loss})
-
-        return total_loss
+    return solver, lbx, ubx, lbg, ubg, X0, Xsp, Usp

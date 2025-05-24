@@ -93,8 +93,7 @@ class Evaporator(object):
         scaled_p = zero_one_scale(p, self.p_min, self.p_max)
         scaled_up = np.hstack((scaled_u, scaled_p))
         
-        result = self.step_fcn(x0=scaled_x, p=scaled_up)       
-            
+        result = self.step_fcn(x0=scaled_x, p=scaled_up)     
         scaled_next_x = np.squeeze(np.array(result['xf']))
         next_x = zero_one_descale(scaled_next_x, self.x_min, self.x_max)
         return next_x
@@ -202,7 +201,7 @@ class Evaporator(object):
         ode_integrator = ca.integrator("Integrator", "cvodes", ode, options)
         return ode_integrator
     
-    def solve_steady_state(self, x_horizon, u_horizon, m_cool_fixed=None, T_cool_in_fixed=None, T_target=-12):
+    # def solve_steady_state(self, x_horizon, u_horizon, m_cool_fixed=None, T_cool_in_fixed=None, T_target=-12):
         x_sx = ca.SX.sym("x", self.x_dim)
         u_opt_sx = ca.SX.sym("u_opt", 2)  # m_ref_in and h_ref_in
 

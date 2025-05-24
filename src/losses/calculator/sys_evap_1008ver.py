@@ -152,18 +152,12 @@ class Evaporator(object):
         return xdot
     
     def _inf_system_dynamics(self, x, u, p):
-        pressure = x[:,0].unsqueeze(-1)
-        h_ref_out = x[:,1].unsqueeze(-1)
-        m_ref_in = u[:,0].unsqueeze(-1)
-        m_ref_out = u[:,1].unsqueeze(-1)
-        h_ref_in = u[:,2].unsqueeze(-1)
-        m_cool = u[:,3].unsqueeze(-1)
-        T_cool_in = u[:,4].unsqueeze(-1)
-        z_tpsh = p[:,0].unsqueeze(-1)
-        gamma = p[:,1].unsqueeze(-1)
-        eps_tp = p[:,2].unsqueeze(-1)
-        eps_sh = p[:,3].unsqueeze(-1)
+        pressure   = x[:, :1]    # (B,1)
+        h_ref_out  = x[:, 1:2]   # (B,1)
+        m_ref_in, m_ref_out, h_ref_in, m_cool, T_cool_in = [u[:, i:i+1] for i in range(5)]
+        z_tpsh, gamma, eps_tp, eps_sh = [p[:, i:i+1] for i in range(4)]
 
+        # Thermodynamic property calculations
         hf = self.Ref.liq_hsat(pressure)
         hg = self.Ref.vap_hsat(pressure)
         dhf_dp = self.Ref.liq_dhsatdp(pressure)
@@ -178,31 +172,34 @@ class Evaporator(object):
         dDdp_sh = self.Ref.vap_dDdp(pressure, h_ref_sh)
         dDdh_sh = self.Ref.vap_dDdh(pressure, h_ref_sh)
         Cp_ref_sh = self.Ref.vap_Cph(pressure, h_ref_sh)
-
         Cp_cool = self.Cool.Cp(T_cool_in)
-
         Tsat = self.Ref.Tsat(pressure)
+
+        # Heat exchange calculations
         T_ref_in_tp = Tsat
         T_ref_in_sh = Tsat
-
         mCp_ref_sh = m_ref_out * Cp_ref_sh
         mCp_cool = m_cool * Cp_cool
         Q_sh = eps_sh * mCp_ref_sh * (T_cool_in - T_ref_in_sh)
         T_cool_mid = T_cool_in - Q_sh / mCp_cool
         Q_tp = eps_tp * mCp_cool * (T_cool_mid - T_ref_in_tp)
 
-        dzdt_mb_coeff = - ((Dg - D_ref_sh) + (Df - Dg) * (1 - gamma))
+        dzdt_mb_coeff = -((Dg - D_ref_sh) + (Df - Dg) * (1 - gamma))
         dzdt_const = (m_ref_in - m_ref_out) / dzdt_mb_coeff / self.V_flow
 
-        mass00 = z_tpsh * ((1-gamma)*((hf-hg)*dDf_dp + Df*dhf_dp) + (gamma*Dg*dhg_dp) - 1)
+        mass00 = z_tpsh * ((1 - gamma) * ((hf - hg) * dDf_dp + Df * dhf_dp) + gamma * Dg * dhg_dp - 1)
         mass01 = dzdt_const
-        mass10 = (1-z_tpsh) * ((h_ref_out-hg)*(dDdp_sh + dDdh_sh*dhg_dp/2) + D_ref_sh*dhg_dp/2 - 1)
-        mass11 = (1-z_tpsh) * ((h_ref_out-hg)*dDdh_sh + D_ref_sh) / 2
+        mass10 = (1 - z_tpsh) * ((h_ref_out - hg) * (dDdp_sh + dDdh_sh * dhg_dp / 2) + D_ref_sh * dhg_dp / 2 - 1)
+        mass11 = (1 - z_tpsh) * ((h_ref_out - hg) * dDdh_sh + D_ref_sh) / 2
+
         rhs0 = m_ref_in * (h_ref_in - hg) + Q_tp
-        rhs1 = m_ref_out * (hg - h_ref_out) + Q_sh    
-        xdot0 = (mass11 * rhs0 - mass01 * rhs1) / (mass00 * mass11 - mass01 * mass10)
-        xdot1 = (mass00 * rhs1 - mass10 * rhs0) / (mass00 * mass11 - mass01 * mass10)
-        xdot = torch.stack([xdot0, xdot1], dim=-1) / self.V_flow
+        rhs1 = m_ref_out * (hg - h_ref_out) + Q_sh
+
+        det = mass00 * mass11 - mass01 * mass10 + 1e-8  # avoid zero division
+        xdot0 = (mass11 * rhs0 - mass01 * rhs1) / det
+        xdot1 = (mass00 * rhs1 - mass10 * rhs0) / det
+
+        xdot = torch.cat([xdot0, xdot1], dim=-1) / self.V_flow  # (B, 2)
         xdot = xdot * self.scale_grad.to(xdot.device)
 
         return xdot
@@ -272,26 +269,18 @@ class Evaporator(object):
         
         return step
     
+
     def _ode_solver(self, x, u, p):
-        # real world scale
-        x, u, p = x.squeeze(0), u.squeeze(0), p.squeeze(0)
-        x_unnorm = Xdenormalizer(x, "unnormalize", "hybrid").unsqueeze(0)
-        u_unnorm = Udenormalizer(u, "unnormalize", "hybrid").unsqueeze(0)
-        p_unnorm = Pdenormalizer(p, "unnormalize", "hybrid").unsqueeze(0)
+        if x.dim() == 1: x = x.unsqueeze(0)
+        if u.dim() == 1: u = u.unsqueeze(0)
+        if p.dim() == 1: p = p.unsqueeze(0)
 
-        # define the ODE function
-        f = lambda t, x: self._inf_system_dynamics(x_unnorm, u_unnorm, p_unnorm)
-        x0 = x_unnorm
-        t = torch.tensor([0.0, 2.0], dtype=torch.float32).to(x.device)
-        x_pred = odeint(f, x0, t, method='rk4')
-
-        x_pred = Xdenormalizer(x_pred, "unnormalize", "hybrid") # real world scale
-        print(x_pred)
-        x_pred = x_pred[-1]
-        print(x_pred)
-        return x_pred
+        t = torch.tensor([0.0, 2.0], device=x.device, dtype=x.dtype)
+        f = lambda t, y: self._inf_system_dynamics(y, u, p)
+        traj = odeint(f, x, t, method='rk4')
+        x_last = traj[-1].squeeze(0)
+        return x_last
     
-
 """
 import numpy as np
 import casadi as ca
