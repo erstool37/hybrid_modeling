@@ -1,8 +1,5 @@
-
-# check if optimizing or PINN training
-
-project: "heat exchanger"
-name: "termprojectGRU"
+project: "term project"
+name: "GRU"
 version: v0
 
 train_settings:

@@ -68,10 +68,10 @@ def setpointCalculator(function, x_tensor, u_tensor, model, descaler, Cp_cool, T
     x0 = np.concatenate((x, [u[0], u[1], u[2]]))  # Only u[0], u[2] optimized
 
     # Bounds
-    x_min = [110, 260]
-    x_max = [225, 360]
-    u_partial_min = [0.01, 0.01, 200]
-    u_partial_max = [0.03, 0.03, 240]
+    x_min = [110, 270]
+    x_max = [360, 360]
+    u_partial_min = [0.005, 0.01, 220]
+    u_partial_max = [0.05, 0.03, 300]
     bounds = list(zip(x_min + u_partial_min, x_max + u_partial_max))
 
     # Constraint: outlet temp balance

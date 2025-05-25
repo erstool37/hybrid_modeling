@@ -1,5 +1,5 @@
 project: "hybrid_model"
-name: "initial_test_run"
+name: "fucking last run"
 version: v0
 
 optimize_settings:
@@ -10,13 +10,11 @@ optimize_settings:
   noise : 5
 
 optimizer:
-  optim_class: Adam
-  scheduler_class: CosineAnnealingLR
   lr: 1e-4
   max_iter : 500
   tolerance : 1
-  temperature : -10 # desired temperature of T_cool
-  step : 10 # step until desired temperature of T_ref_in changes
+  temperature : -12 # desired temperature of T_cool
+  step : 40 # step until desired temperature of T_ref_in changes
   
 preprocess:
   scaler : normalize
@@ -27,5 +25,3 @@ preprocess:
 directories: 
   checkpoint : "src/weights/best_run_selection_0512_vF.pth"
   data_root : "../../MATLAB/SIMULINK/optimization"
-
-cost: Quad
