@@ -8,7 +8,7 @@ from matplotlib import font_manager
 font_path = "/usr/share/fonts/truetype/msttcorefonts/Times_New_Roman.ttf"
 font_prop = font_manager.FontProperties(fname=font_path, size=11)
 
-"""
+
 def plot_prediction(bb_path, hyb_path, pinn_path, ans_path, start=0, window=500):
     # Load CSVs
     bb = pd.read_csv(bb_path).to_numpy()
@@ -72,6 +72,7 @@ def plot_prediction(bb_path, hyb_path, pinn_path, ans_path, start=0, window=500)
     plt.close()
 plot_prediction("savefiles/y_traj_bb_val.csv", "savefiles/y_traj_hyb_val.csv", "savefiles/pinn_total.csv", "savefiles/dataset.csv", start=42800, window=200)
 
+"""
 def plot_convergence(csv_path):
     data = pd.read_csv(csv_path)
 
@@ -145,3 +146,4 @@ def plot_time(csv_path):
     plt.close()
     
 plot_time("savefiles/zeta.csv")
+"""
