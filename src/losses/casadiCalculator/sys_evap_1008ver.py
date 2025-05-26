@@ -98,12 +98,11 @@ class Evaporator(object):
         next_x = zero_one_descale(scaled_next_x, self.x_min, self.x_max)
         return next_x
     
-    
     def get_observation(self, x):
         y = x
         return y
         
-        
+    
     def do_reset(self):
         return self.x_ini, self.u_ini, self.y_ini, self.p_ini
     
@@ -200,61 +199,6 @@ class Evaporator(object):
         options = {'t0': 0, 'tf': self.time_interval}
         ode_integrator = ca.integrator("Integrator", "cvodes", ode, options)
         return ode_integrator
-    
-    # def solve_steady_state(self, x_horizon, u_horizon, m_cool_fixed=None, T_cool_in_fixed=None, T_target=-12):
-        x_sx = ca.SX.sym("x", self.x_dim)
-        u_opt_sx = ca.SX.sym("u_opt", 2)  # m_ref_in and h_ref_in
-
-        # Unpack
-        m_ref_in = u_opt_sx[0]
-        m_ref_out = u_opt_sx[0]
-        h_ref_in = u_opt_sx[1]
-        m_cool = m_cool_fixed
-        T_cool_in = T_cool_in_fixed
-
-        # Reconstruct full u
-        u_full = ca.vertcat(m_ref_in, m_ref_out, h_ref_in, m_cool, T_cool_in)
-
-        # System parameters
-        p = self.pCalculator(x_sx, u_full)
-        xdot_sx = self._system_dynamics(x_sx, u_full, p_sx)
-        cost = ca.dot(xdot_sx, xdot_sx)  # steady-state objective
-
-        # Energy balance constraint: Q_ref = m_ref_in (h_ref_out - h_ref_in)
-        pressure, h_ref_out = x_sx[0], x_sx[1]
-        Q_ref = m_ref_in * (h_ref_out - h_ref_in)
-
-        T_avg = (T_cool_in + T_target) / 2
-        Cp_cool = self.Cool.Cp(T_avg)
-        C_cool = m_cool * Cp_cool
-        T_cool_out_pred = -Q_ref / C_cool + T_cool_in
-
-        energy_constraint = T_cool_out_pred - T_target  # should == 0
-
-        # Define NLP
-        opt_vars = ca.vertcat(x_sx, u_opt_sx)
-        constraints = ca.vertcat(energy_constraint)
-        nlp = {"x": opt_vars, "f": cost, "g": constraints}
-
-        # Bounds (x + u_opt)
-        lbx = np.concatenate([self.x_min, [self.u_min[0], self.u_min[2]]])
-        ubx = np.concatenate([self.x_max, [self.u_max[0], self.u_max[2]]])
-        lbg = [0.]
-        ubg = [0.]
-
-        # Solve
-        solver = ca.nlpsol("ss_solver", "ipopt", nlp)
-        sol = solver(lbx=lbx, ubx=ubx, lbg=lbg, ubg=ubg)
-        opt_val = np.array(sol["x"]).squeeze()
-
-        x_sp = opt_val[:self.x_dim]
-        u_sp = np.array([opt_val[self.x_dim],  # m_ref_in
-                        opt_val[self.x_dim],  # m_ref_out = m_ref_in
-                        opt_val[self.x_dim+1],  # h_ref_in
-                        m_cool,                # fixed
-                        T_cool_in])            # fixed
-
-        return x_sp, u_sp
 
     def pCalculator(self, x_horizon, u_horizon):
         weight_path="lstm_weights.npz"

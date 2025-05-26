@@ -2,19 +2,16 @@ import numpy as np
 from scipy.optimize import minimize
 from collections import deque
 import torch
-from utils import (
-    Xdenormalizer, Udenormalizer, Pdenormalizer,
-    Xnormalizer, Unormalizer
-)
+from utils import Xdenormalizer, Udenormalizer, Xnormalizer, Unormalizer
 
 def mpc(model_input, x_sp_t, u_sp_t,
         f_p, f_x, P, Q, R, descaler,
         u_min, u_max, x_min, x_max):
-    # 1) last 30‐step normalized horizon
+    # last 30‐step normalized horizon
     x_seq_norm = model_input[0, :, :2].cpu().numpy().astype(np.float64)   # (30,2)
     u_seq_norm = model_input[0, :, 2:7].cpu().numpy().astype(np.float64)  # (30,5)
 
-    # 2) unnormalize the last state & control
+    # unnormalize the last state & control
     x0_norm      = x_seq_norm[-1]
     u0_norm_full = u_seq_norm[-1]
     x0_real      = Xdenormalizer(
@@ -26,15 +23,13 @@ def mpc(model_input, x_sp_t, u_sp_t,
                        descaler, "optim"
                    ).cpu().numpy()
 
-    # fix the non‐optimized channels
+    
     m_cool_fixed = float(u0_real_full[3])
     T_cool_fixed = float(u0_real_full[4])
 
-    # set‐points as numpy floats
     x_sp_np = x_sp_t.cpu().numpy().astype(np.float64)
     u_sp_np = u_sp_t.cpu().numpy().astype(np.float64)
 
-    # 3) initial guess for [m_in,h_in] over N=5 steps
     N = 5
     z0 = np.tile([u0_real_full[0], u0_real_full[2]], N).astype(np.float64)
 

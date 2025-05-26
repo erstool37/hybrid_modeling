@@ -1,5 +1,4 @@
 import torch
-import torch.nn as nn
 import numpy as np
 import wandb
 from tqdm import tqdm
@@ -15,7 +14,7 @@ from losses.calculator.prop_cool_evap import Coolant_Evaporator
 from losses.casadiCalculator.sys_evap_1008ver import Evaporator as ca_Evaporator
 from losses.casadiCalculator.prop_ref import Refrigerant as ca_Refrigerant
 from losses.casadiCalculator.prop_cool_evap import Coolant_Evaporator as ca_Coolant_Evaporator
-from utils import setseed, Xdenormalizer, Udenormalizer, Odenormalizer, setpointCalculator, Pdenormalizer
+from utils import setseed, Odenormalizer, setpointCalculator
 from models.HybridLSTMModel import HybridLSTMModel
 from datasets.Realtimeloader import Realtimeloader
 from costs.Quad import mpc
@@ -75,8 +74,8 @@ Evap = Evaporator(Ref, Cool_evap)
 ca_Evap = ca_Evaporator(ca_Ref, ca_Cool_evap)
 
 # Optimization setup
-u_min = np.array([0.01, 0.01, 250.0, 0.4, -10.0], dtype=np.float32)
-u_max = np.array([0.03, 0.03, 280.0, 0.8, 10.0], dtype=np.float32)
+u_min = np.array([0.005, 0.005, 250.0, 0.4, -20.0], dtype=np.float32)
+u_max = np.array([0.05, 0.05, 300.0, 0.8, -10.0], dtype=np.float32)
 x_min = np.array([100.0, 270.0], dtype=np.float32)
 x_max = np.array([360.0, 380.0], dtype=np.float32)
 
@@ -99,17 +98,12 @@ for idx in tqdm(range(NUM)):
     x = model_input[:,-1,:2].squeeze(1).squeeze(0)
     u = model_input[:,-1,2:7].squeeze(1).squeeze(0)
     temp = torch.tensor(TEMP).unsqueeze(0).unsqueeze(0)
-    x_sp, u_sp = setpointCalculator(ca_Evap.go_step, x, u, model, DESCALER, Cool_evap.Cp(temp), TEMP, tol=1e-4, method="SLSQP")
+    x_sp, u_sp = setpointCalculator(ca_Evap.go_step, x, u, model, SCALER, DESCALER, Cool_evap.Cp(temp), TEMP, tol=1e-4, method="SLSQP")
     x_sp = torch.tensor(x_sp, dtype=torch.float32, device=device)
     u_sp = torch.tensor(u_sp, dtype=torch.float32, device=device)
 
     # optimzation
     u0_opt, x_pred = mpc(model_input, x_sp, u_sp, Evap.pCalculator, Evap.go_step, P, Q, R, DESCALER, u_min, u_max, x_min, x_max)
-    print("set point", x_sp , u_sp)
-    print("u0_opt", u0_opt)
-    print("x_pred", x_pred)
-    print("x_set point", x_sp)
-    print("u_set point", u_sp)
 
     if idx % int(STEP) == 0:
         noise = (2*torch.rand(1, device=device) - 1) * NOISE

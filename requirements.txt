@@ -49,3 +49,4 @@ silence_tensorflow
 keras
 casadi
 tensorflow
+torchdiffeqs

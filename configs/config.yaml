@@ -1,13 +1,5 @@
-<<<<<<< HEAD
-project: "term project"
-name: "GRU"
-=======
-
-# check if optimizing or PINN training
-
 project: "heat exchanger"
-name: "termprojectRNN"
->>>>>>> cd54bfd (term project)
+name: "run"
 version: v0
 
 train_settings:

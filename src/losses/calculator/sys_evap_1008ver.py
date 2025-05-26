@@ -6,8 +6,6 @@ Created on Fri Aug 30 18:51:43 2024
 
 import torch
 import numpy as np
-from .utility import zero_one_scale, zero_one_descale
-from utils import Xdenormalizer, Udenormalizer, Odenormalizer, Pdenormalizer
 from torchdiffeq import odeint
 
 class Evaporator(object):
@@ -287,6 +285,7 @@ class Evaporator(object):
 
         def lstm_forward(x_seq, W_ih, W_hh, b_ih, b_hh, h0=None, c0=None):
             T, input_size = x_seq.shape
+            print("x", x_seq)
             H = W_hh.shape[1]  # hidden size
 
             h = np.zeros(H) if h0 is None else h0
@@ -296,7 +295,6 @@ class Evaporator(object):
                 x_t = x_seq[t]
                 gates = (W_ih @ x_t + b_ih) + (W_hh @ h + b_hh)
                 i, f, g, o = np.split(gates, 4)
-
                 i = sigmoid(i)
                 f = sigmoid(f)
                 g = np.tanh(g)

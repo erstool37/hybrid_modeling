@@ -3,7 +3,7 @@ from scipy.optimize import minimize
 import torch
 from utils import Pdenormalizer, Xdenormalizer, Udenormalizer, Xnormalizer, Unormalizer
 
-def predict_p(xu, model, descaler):
+def predict_p(xu, model, scaler, descaler):
     model.eval()
     with torch.no_grad():
         xu_tensor = torch.tensor(xu, dtype=torch.float32).unsqueeze(0).unsqueeze(0)  # shape: (1, 1, 7)
@@ -11,8 +11,8 @@ def predict_p(xu, model, descaler):
         x = xu_tensor[:, :, :2].squeeze(0).squeeze(0)
         u = xu_tensor[:, :, 2:].squeeze(0).squeeze(0)
         
-        norm_x = Xnormalizer(x, descaler, "optim")
-        norm_u = Unormalizer(u, descaler, "optim")
+        norm_x = Xnormalizer(x, scaler, "optim")
+        norm_u = Unormalizer(u, scaler, "optim")
 
         xu_norm = torch.cat([norm_x, norm_u], dim=-1)
         xu_horizon = xu_norm.repeat(1,30,1)
@@ -21,7 +21,7 @@ def predict_p(xu, model, descaler):
         p = Pdenormalizer(p_scaled, descaler, "optim").cpu().numpy()
     return p
 
-def objective(var, model, descaler, function, fixed_u):
+def objective(var, model, scaler, descaler, function, fixed_u):
     x = var[:2]
     u_partial = var[2:]  # [u[0], u[2]]
 
@@ -31,7 +31,7 @@ def objective(var, model, descaler, function, fixed_u):
     u_full[2] = u_partial[2]
 
     xu = np.concatenate((x, u_full), axis=0)
-    p = predict_p(xu, model, descaler)
+    p = predict_p(xu, model, scaler, descaler)
     xdot = function(x, u_full, p)
     return np.sum(xdot**2)
 
@@ -50,13 +50,13 @@ def T_cool_out(var, Cp_cool, T_cool_target, fixed_u):
 
     Q_ref = m_ref_in * (h_ref_out - h_ref_in)
     Q_cool = m_cool * Cp_cool * (T_cool_target - T_cool_in)
-    dQ = np.array([Q_ref - Q_cool]).flatten()
+    dQ = np.array([Q_ref + Q_cool]).flatten()
     return dQ
 
 def constraint_u(var):
     return np.array([var[2] - var[3]])
 
-def setpointCalculator(function, x_tensor, u_tensor, model, descaler, Cp_cool, T_cool_target, tol=1e-4, method='SLSQP'):
+def setpointCalculator(function, x_tensor, u_tensor, model, scaler, descaler, Cp_cool, T_cool_target, tol=1e-4, method='SLSQP'):
     # Convert tensors to NumPy
     x = Xdenormalizer(x_tensor, descaler, "optim")
     u = Udenormalizer(u_tensor, descaler, "optim")
@@ -68,10 +68,10 @@ def setpointCalculator(function, x_tensor, u_tensor, model, descaler, Cp_cool, T
     x0 = np.concatenate((x, [u[0], u[1], u[2]]))  # Only u[0], u[2] optimized
 
     # Bounds
-    x_min = [110, 270]
-    x_max = [360, 360]
-    u_partial_min = [0.005, 0.01, 220]
-    u_partial_max = [0.05, 0.03, 300]
+    x_min = [100, 270]
+    x_max = [360, 380]
+    u_partial_min = [0.005, 0.005, 250]
+    u_partial_max = [0.05, 0.05, 300]
     bounds = list(zip(x_min + u_partial_min, x_max + u_partial_max))
 
     # Constraint: outlet temp balance
@@ -84,15 +84,13 @@ def setpointCalculator(function, x_tensor, u_tensor, model, descaler, Cp_cool, T
         "fun": constraint_u
     }]
 
-    # Optimization
     result = minimize(
-        objective,
-        x0,
-        args=(model, descaler, function, fixed_u),
-        bounds=bounds,
-        constraints=constraints,
-        tol=tol,
-        method=method
+    lambda var: objective(var, model, scaler,  descaler, function, fixed_u),
+    x0,
+    bounds=bounds,
+    constraints=constraints,
+    tol=tol,
+    method=method
     )
 
     # Rebuild full u

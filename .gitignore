@@ -7,3 +7,4 @@ src/inference/*
 src/weights/*
 KERASTEST/
 savefiles/
+latex/
