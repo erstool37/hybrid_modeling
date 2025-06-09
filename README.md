@@ -13,6 +13,7 @@ Moving Boundary modeled ODEs are derived and written in casadi framework by Jisu
 bash scripts/setup.sh
 
 # Train or test real time MPC. This requires real-time SIMULINK-pytorch MPC interface based on CSV file exchange. Contact author if needed.
+# change specifications in configs
 bash scripts/dev.sh
 ```
 
