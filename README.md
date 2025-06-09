@@ -18,11 +18,13 @@ bash scripts/dev.sh
 
 ## Results
 
-Modeling Results, are compared with vanilla-LSTM, hybrid-modeled predictions provided by Jisung Byun. 
+- Modeling Results, are compared with vanilla-LSTM, hybrid-modeled predictions provided by Jisung Byun. 
 The PINN model provide better predictions for the system in terms of enthalpy and pressure outlet of refrigerants.
+
 ![Modeling Results](dataset/assets/modeling_results.png)
 
-Optimizatio Results, are successful in control accuracy, but requires 15 seconds of optimization calculation for one time interval(requires optimization for every two seconds in real applications.)
+- Optimization Results, are successful in control accuracy, but requires 15 seconds of optimization calculation for one time interval(requires optimization for every two seconds in real applications.)
 This is due to missing GPU acceleration, for the MPC framework could not be applied in GPU servers, and are calculated on Macbook Air M2 processor.
 Training of the PINN was based on A100 40GB.
+
 ![Optimization Results](dataset/assets/optimization_results.png)
