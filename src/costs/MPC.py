@@ -6,9 +6,9 @@ from utils import Xdenormalizer, Udenormalizer, Odenormalizer
 from losses.calculator.prop_cool_evap import Coolant_Evaporator
 from losses.calculator.prop_ref import Refrigerant
 
-class eMPC(nn.Module):
+class MPC(nn.Module):
     def __init__(self, T_target, descaler):
-        super(eMPC, self).__init__()
+        super(MPC, self).__init__()
         self.T_target = torch.tensor(T_target)
         self.descaler = descaler
 
@@ -32,19 +32,20 @@ class eMPC(nn.Module):
         Q_ref = m_ref_in_optim * (h_ref_out_next - h_ref_in_optim)
         C_cool = m_cool * self.CE.Cp((T_cool_out.unsqueeze(0).unsqueeze(-1)+T_cool_in.unsqueeze(0).unsqueeze(-1))/2)
         T_cool_out_pred =  -1 * Q_ref / C_cool + T_cool_in.detach()
-        T_cool_out_pred = T_cool_out_pred.squeeze(0).squeeze(-1)
+        T_cool_out_pred = T_cool_out_pred.squeeze(0).squeeze(-1) + 1 
 
         # Cost function
-        loss_T_pred = (self.T_target - T_cool_out) - T_cool_out_pred
+        loss_T_pred = F.mse_loss(T_cool_out_pred, T_cool_out)
         loss_T = F.mse_loss(self.T_target, T_cool_out_pred)
         # loss_Q = -0.2 * Q_ref
 
         # Constaints
-        loss_pos = F.softmax(-m_ref_in_optim.detach(), dim=-1) + F.softmax(-h_ref_in_optim, dim=-1)
-        loss_zeta = F.relu(1.0 - z_tpsh)
-        loss_h = F.relu(180.0 - h_ref_in_optim) + F.relu(h_ref_in_optim - 240.0)
-        loss_m = F.relu(0.01 - m_ref_in_optim) + F.relu(m_ref_in_optim - 0.04)
+        loss_pos = F.softplus(-m_ref_in_optim) + F.softplus(-h_ref_in_optim)
+        loss_zeta = F.softplus(z_tpsh - 1.0)
+        # loss_h = F.relu(180.0 - h_ref_in_optim) + F.relu(h_ref_in_optim - 240.0)
+        loss_m_cool = F.relu(0.2 - m_cool) + F.relu(m_cool - 0.8)
+        loss_m = F.relu(0.01 - m_ref_in_optim) + F.relu(m_ref_in_optim - 0.05)
 
-        loss_total = loss_T + 3 * loss_pos + (loss_zeta + loss_h + loss_m)
+        loss_total = 3 * loss_T + (loss_zeta) + (loss_m + loss_m_cool)
 
         return loss_total, T_cool_out_pred

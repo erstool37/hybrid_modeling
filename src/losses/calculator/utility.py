@@ -1,3 +1,5 @@
+# Based on Jisung Byun's work, modified for PyTorch
+
 from pathlib import Path
 
 # scale X -> [0,1]

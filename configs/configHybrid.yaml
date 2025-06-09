@@ -7,7 +7,7 @@ optimize_settings:
   pin_memory : False
   seed : 37
   num : 1000
-  noise : 5
+  noise : 1
 
 optimizer:
   lr: 1e-4

@@ -7,7 +7,7 @@ train_settings:
   num_epochs : 1000
   num_workers : 16
   pin_memory : False
-  seed : 37
+  seed : 40
   
 preprocess:
   scaler : normalize
@@ -53,24 +53,25 @@ optimization :
   optimize_settings:
     num_workers : 16  
     pin_memory : False
-    seed : 37
+    seed : 12399
     num : 500
+    noise : 3
 
   optimizer:
     optim_class: Adam
-    scheduler_class: ReduceLROnPlateau
+    scheduler_class: CosineAnnealingLR
     lr: 1e-4
     eta_min : 1e-8
     max_iter : 1000
     tolerance : 1
     temperature : -12 # desired temperature of T_cool
-    step : 40 # step until desired temperature of T_ref_in changes
+    step : 60 # step until desired temperature of T_ref_in changes
 
   model:
-    model_class : RNN
+    model_class : lstmPINN
     dataloader : Realtimeloader
     lstm_size : 512
-    lstm_layers : 4
+    lstm_layers : 5
     output_size : 6
     
   preprocess:
@@ -80,7 +81,7 @@ optimization :
     time_step : 2
   
   directories: 
-    checkpoint : "src/weights/total_test_run_0520_v3.pth"
+    checkpoint : "src/weights/best_run_selection_0512_vF.pth"
     data_root : "../../MATLAB/SIMULINK/optimization"
 
-  cost: eMPC
+  cost: MPC

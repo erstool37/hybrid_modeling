@@ -1,3 +1,9 @@
+"""
+Created on Fri Aug 30 18:51:43 2024
+
+@author: jisung
+"""
+
 import casadi as ca
 from pathlib import Path
 

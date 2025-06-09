@@ -13,9 +13,8 @@ class HybridLSTMModel(nn.Module):
         self.fc2 = nn.Linear(dense_size, output_size)
 
     def forward(self, x):
-        # x: (batch, lookback, input_size)
-        lstm_out, _ = self.lstm(x)  # (batch, lookback, hidden_size)
+        lstm_out, _ = self.lstm(x)
         x = self.dropout(lstm_out)
-        x = self.act(self.fc1(x))  # (batch, lookback, dense_size)
-        out = self.act(self.fc2(x))  # (batch, lookback, output_size)
+        x = self.act(self.fc1(x)) 
+        out = self.act(self.fc2(x))
         return out

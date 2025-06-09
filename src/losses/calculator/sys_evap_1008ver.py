@@ -1,8 +1,4 @@
-"""
-Created on Fri Aug 30 18:51:43 2024
-
-@author: jisung
-"""
+# Based on Jisung Byun's work, modified for PyTorch
 
 import torch
 import numpy as np
@@ -280,12 +276,14 @@ class Evaporator(object):
     
     def pCalculator(self, x_horizon, u_horizon):
         weight_path="src/weights/lstm_weights.npz"
-        def sigmoid(x):
-            return 1 / (1 + np.exp(-x))
+
+        def sigmoid(x: np.ndarray) -> np.ndarray:
+            clamp_bound = 88.0
+            x_clamped = np.clip(x, -clamp_bound, +clamp_bound)
+            return 1.0 / (1.0 + np.exp(-x_clamped))
 
         def lstm_forward(x_seq, W_ih, W_hh, b_ih, b_hh, h0=None, c0=None):
             T, input_size = x_seq.shape
-            print("x", x_seq)
             H = W_hh.shape[1]  # hidden size
 
             h = np.zeros(H) if h0 is None else h0

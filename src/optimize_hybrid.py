@@ -74,14 +74,14 @@ Evap = Evaporator(Ref, Cool_evap)
 ca_Evap = ca_Evaporator(ca_Ref, ca_Cool_evap)
 
 # Optimization setup
-u_min = np.array([0.005, 0.005, 250.0, 0.4, -20.0], dtype=np.float32)
+u_min = np.array([0.005, 0.005, 250.0, 0.3, -20.0], dtype=np.float32)
 u_max = np.array([0.05, 0.05, 300.0, 0.8, -10.0], dtype=np.float32)
 x_min = np.array([100.0, 270.0], dtype=np.float32)
 x_max = np.array([360.0, 380.0], dtype=np.float32)
 
 Q = np.eye(2, dtype=np.float32)
 R = np.eye(5, dtype=np.float32)
-P = np.eye(2, dtype=np.float32)
+P = 30 * np.eye(2, dtype=np.float32)
 
 # Simulation start
 print("Simulation start")
@@ -97,13 +97,14 @@ for idx in tqdm(range(NUM)):
     # set point calculation
     x = model_input[:,-1,:2].squeeze(1).squeeze(0)
     u = model_input[:,-1,2:7].squeeze(1).squeeze(0)
+    others = others[:,-1,:].squeeze(1).squeeze(0)
     temp = torch.tensor(TEMP).unsqueeze(0).unsqueeze(0)
-    x_sp, u_sp = setpointCalculator(ca_Evap.go_step, x, u, model, SCALER, DESCALER, Cool_evap.Cp(temp), TEMP, tol=1e-4, method="SLSQP")
+    x_sp, u_sp = setpointCalculator(ca_Evap._system_dynamics, ca_Evap.go_step, x, u, others, model, SCALER, DESCALER, Cool_evap.Cp(temp), TEMP, tol=1e-4)
     x_sp = torch.tensor(x_sp, dtype=torch.float32, device=device)
     u_sp = torch.tensor(u_sp, dtype=torch.float32, device=device)
 
     # optimzation
-    u0_opt, x_pred = mpc(model_input, x_sp, u_sp, Evap.pCalculator, Evap.go_step, P, Q, R, DESCALER, u_min, u_max, x_min, x_max)
+    u0_opt, x_pred = mpc(model_input, x_sp, u_sp, Evap.pCalculator, Evap.go_step, P, Q, R, SCALER, DESCALER, u_min, u_max, x_min, x_max)
 
     if idx % int(STEP) == 0:
         noise = (2*torch.rand(1, device=device) - 1) * NOISE
@@ -124,7 +125,7 @@ for idx in tqdm(range(NUM)):
                   step=idx*2)
         convergence = 0
 
-    # 10) wandb logging
+    # wandb logging
     wandb.log({
         "T_cool_out desired": set_temp,
         "T_cool_out": T_cool_out,

@@ -1,3 +1,9 @@
+"""
+Created on Fri Aug 30 18:51:43 2024
+
+@author: jisung
+"""
+
 import numpy as np
 import casadi as ca
 from .utility import zero_one_scale, zero_one_descale
@@ -201,7 +207,7 @@ class Evaporator(object):
         return ode_integrator
 
     def pCalculator(self, x_horizon, u_horizon):
-        weight_path="lstm_weights.npz"
+        weight_path="src/weights/lstm_weights.npz"
         def sigmoid(x):
             return 1 / (1 + np.exp(-x))
 

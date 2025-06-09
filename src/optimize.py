@@ -91,7 +91,8 @@ for idx in tqdm(range(NUM)):
     full_seq = next(data_iter).to(device)
     hist = full_seq.detach()
     u_full = hist[0, -1, 2:7].clone().detach()
-    m_cool_in_fixed = u_full[3].item()
+    h_ref_in_fixed = u_full[2].item()
+    # m_cool_in_fixed = u_full[3].item()
     T_cool_in_fixed = u_full[4].item()
     u_now = torch.tensor([u_full[0].item(), u_full[2].item(), u_full[3].item()], device=u_full.device, requires_grad=True)
 
@@ -103,7 +104,8 @@ for idx in tqdm(range(NUM)):
     start_time = time.time()
     for step in range(1, MAX_ITER + 1):
         seq = hist.clone()
-        full_u = torch.cat([u_now[0].unsqueeze(0), u_now[0].detach().unsqueeze(0), u_now[1].unsqueeze(0), torch.tensor([m_cool_in_fixed], device=u_now.device), torch.tensor([T_cool_in_fixed], device=u_now.device)])
+        full_u = torch.cat([u_now[0].unsqueeze(0), u_now[0].detach().unsqueeze(0), torch.tensor([h_ref_in_fixed], device=u_now.device), u_now[2].unsqueeze(0), torch.tensor([T_cool_in_fixed], device=u_now.device)])
+        # full_u = torch.cat([u_now[0].unsqueeze(0), u_now[0].detach().unsqueeze(0), u_now[1].unsqueeze(0), torch.tensor([m_cool_in_fixed], device=u_now.device), torch.tensor([T_cool_in_fixed], device=u_now.device)])
         seq[0, -1, 2:7] = full_u
         x_pred = model(seq[:, :, :7]).squeeze(0)
 
@@ -122,7 +124,8 @@ for idx in tqdm(range(NUM)):
     end_time = time.time()
     T_ref_in, T_ref_out, T_cool_out, z_tpsh = Odenormalizer(seq[0, -1, 7:11], DESCALER, "optim")
     u_now = u_now.detach()
-    full_u = torch.cat([u_now[0].unsqueeze(0), u_now[0].unsqueeze(0), u_now[1].unsqueeze(0), torch.tensor([m_cool_in_fixed], device=u_now.device), torch.tensor([T_cool_in_fixed], device=u_now.device)])
+    # full_u = torch.cat([u_now[0].unsqueeze(0), u_now[0].unsqueeze(0), u_now[1].unsqueeze(0), torch.tensor([m_cool_in_fixed], device=u_now.device), torch.tensor([T_cool_in_fixed], device=u_now.device)])
+    full_u = torch.cat([u_now[0].unsqueeze(0), u_now[0].detach().unsqueeze(0), torch.tensor([h_ref_in_fixed], device=u_now.device), u_now[2].unsqueeze(0), torch.tensor([T_cool_in_fixed], device=u_now.device)])
     u_now_unnorm = Udenormalizer(full_u, DESCALER, "optim")
 
     # Noise in T_cool_in
@@ -145,7 +148,7 @@ for idx in tqdm(range(NUM)):
     wandb.log({
         "T_cool_out desired": set_temp, "T_cool_out": T_cool_out, "T_cool_out_pred": T_cool_out_pred.item(), "T_cool_in noise": u_optim[4],
         "steps": step, "time": end_time - start_time, "total_loss": loss.item(),
-        "m_ref_in_optim": u_optim[0], "h_ref_in_optim": u_optim[2],
+        "m_ref_in_optim": u_optim[0], "h_ref_in_optim": u_optim[2], "m_cool": u_optim[3],
         "T_ref_in": T_ref_in.item(), "T_ref_out": T_ref_out.item(),
         "zeta_tpsh": z_tpsh.item(),
     }, step=idx*2)

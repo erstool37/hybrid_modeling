@@ -1,104 +1,82 @@
+import casadi as ca
 import numpy as np
-from scipy.optimize import minimize
 import torch
-from utils import Pdenormalizer, Xdenormalizer, Udenormalizer, Xnormalizer, Unormalizer
-
-def predict_p(xu, model, scaler, descaler):
-    model.eval()
-    with torch.no_grad():
-        xu_tensor = torch.tensor(xu, dtype=torch.float32).unsqueeze(0).unsqueeze(0)  # shape: (1, 1, 7)
-        
-        x = xu_tensor[:, :, :2].squeeze(0).squeeze(0)
-        u = xu_tensor[:, :, 2:].squeeze(0).squeeze(0)
-        
-        norm_x = Xnormalizer(x, scaler, "optim")
-        norm_u = Unormalizer(u, scaler, "optim")
-
-        xu_norm = torch.cat([norm_x, norm_u], dim=-1)
-        xu_horizon = xu_norm.repeat(1,30,1)
-        p_scaled = model(xu_horizon).squeeze(0).squeeze(0)
-        p_scaled = p_scaled[-1, :]
-        p = Pdenormalizer(p_scaled, descaler, "optim").cpu().numpy()
-    return p
-
-def objective(var, model, scaler, descaler, function, fixed_u):
-    x = var[:2]
-    u_partial = var[2:]  # [u[0], u[2]]
-
-    u_full = fixed_u.copy()
-    u_full[0] = u_partial[0]
-    u_full[1] = u_partial[1]
-    u_full[2] = u_partial[2]
-
-    xu = np.concatenate((x, u_full), axis=0)
-    p = predict_p(xu, model, scaler, descaler)
-    xdot = function(x, u_full, p)
-    return np.sum(xdot**2)
+from utils import Xdenormalizer, Udenormalizer, Xnormalizer, Unormalizer, Pdenormalizer, Odenormalizer
 
 
-def T_cool_out(var, Cp_cool, T_cool_target, fixed_u):
-    x = var[:2]
-    u_partial = var[2:]
+def setpointCalculator(system_dynamics, go_step, x_tensor, u_tensor, others_tensor,
+    model, scaler, descaler, Cp_cool, T_cool_target, tol=1e-4):
 
-    u_full = fixed_u.copy()
-    u_full[0] = u_partial[0]
-    u_full[1] = u_partial[1]
-    u_full[2] = u_partial[2]
+    x0_np = Xdenormalizer(x_tensor, descaler, "optim").cpu().numpy()
+    u0_np = Udenormalizer(u_tensor, descaler, "optim").cpu().numpy()
+    O_np = Odenormalizer(others_tensor, descaler, "optim").cpu().numpy()
 
-    _, h_ref_out = x
-    m_ref_in, _, h_ref_in, m_cool, T_cool_in = u_full
+    T_ref_in = float(O_np[0])
+    T_cool_in = float(O_np[1])
+    m_cool = float(O_np[2]) 
+    Cp_cool = float(Cp_cool)
+    fixed_u = u0_np.copy()
+    
+    # Variable stacking and initial guess
+    z0 = np.hstack([300, 300, 0.02, 0.02, 0.8])
+    # z0 = np.hstack([ x0_np, u0_np[:3] ])
+    z = ca.SX.sym("z", 5)
+    x_var   = z[0:2]        
+    u_part  = z[2:5]
 
-    Q_ref = m_ref_in * (h_ref_out - h_ref_in)
-    Q_cool = m_cool * Cp_cool * (T_cool_target - T_cool_in)
-    dQ = np.array([Q_ref + Q_cool]).flatten()
-    return dQ
+    u_full = ca.vertcat(u_part[0], u_part[1], fixed_u[2], u_part[2], fixed_u[4])
+    # u_full = ca.vertcat(u_part[0], u_part[1], u_part[2], fixed_u[3], fixed_u[4])
 
-def constraint_u(var):
-    return np.array([var[2] - var[3]])
+    def predict_p_np(zval):
+        xu = np.hstack([ zval[0:2], zval[2:5], fixed_u[3:], ])
+        with torch.no_grad():
+            xu_t = torch.tensor(xu, dtype=torch.float32)
+            x_t  = xu_t[:2];  u_t = xu_t[2:]
+            nx   = Xnormalizer(x_t, scaler, "optim")
+            nu   = Unormalizer(u_t, scaler, "optim")
+            inp  = torch.cat([nx,nu])
+            hor  = inp.repeat(30,1).unsqueeze(0)
+            ps   = model(hor).squeeze().detach()
+            ps   = ps[-1,:]
+            return Pdenormalizer(ps, descaler, "optim").cpu().numpy()
+    p0 = predict_p_np(z0)
+    eps_tp = float(p0[2])
 
-def setpointCalculator(function, x_tensor, u_tensor, model, scaler, descaler, Cp_cool, T_cool_target, tol=1e-4, method='SLSQP'):
-    # Convert tensors to NumPy
-    x = Xdenormalizer(x_tensor, descaler, "optim")
-    u = Udenormalizer(u_tensor, descaler, "optim")
-    x = x.detach().cpu().numpy()
-    u = u.detach().cpu().numpy()
-    fixed_u = u.copy()
+    # Objective
+    xdot = system_dynamics(x_var, u_full, p0)
+    constraint = ca.dot(xdot, xdot)
+    # f_sym = ca.dot(xdot, xdot)
 
-    # Initial guess: x + selected u
-    x0 = np.concatenate((x, [u[0], u[1], u[2]]))  # Only u[0], u[2] optimized
+    # constraints
+    
+    T_cool_sys = u_full[0] * (x_var[1] - u_full[2]) / (u_full[3] * float(Cp_cool)) + u_full[4]
+    dQ = T_cool_sys - T_cool_target
+    
+    f_sym = ca.dot(dQ, dQ)
+    
+    # Q_max = 0.2 * u_full[3] * Cp_cool * (T_ref_in - T_cool_in) # in negative direction
+    # Q_cool= u_full[3] * Cp_cool * (T_cool_target - u_full[4]) # m_cool * Cp_cool * (T_cool_target - T_cool_in)
+    # dQ = Q_max - Q_cool
 
-    # Bounds
-    x_min = [100, 270]
-    x_max = [360, 380]
-    u_partial_min = [0.005, 0.005, 250]
-    u_partial_max = [0.05, 0.05, 300]
-    bounds = list(zip(x_min + u_partial_min, x_max + u_partial_max))
+    eq1 = constraint
+    # eq1 = dQ
+    eq2 = u_part[0] - u_part[1]
+    g_sym = ca.vertcat(eq1, eq2)
 
-    # Constraint: outlet temp balance
-    constraints = [{
-        "type": "eq",
-        "fun": T_cool_out,
-        "args": (Cp_cool, T_cool_target, fixed_u)
-    }, {
-        "type": "eq",
-        "fun": constraint_u
-    }]
+    # bounds
+    lbz = [ 100, 200, 0.005, 0.005, 200 ]
+    ubz = [ 400, 400, 0.05,  0.05,  300 ]
 
-    result = minimize(
-    lambda var: objective(var, model, scaler,  descaler, function, fixed_u),
-    x0,
-    bounds=bounds,
-    constraints=constraints,
-    tol=tol,
-    method=method
-    )
+    # solve
+    nlp = {"x": z, "f": f_sym, "g": g_sym}
+    opts = {"ipopt.print_level": 5, "print_time" : True, "ipopt.tol": tol, "ipopt.max_iter" : 100000, "ipopt.output_file" : "ipopt.log"}
+    solver = ca.nlpsol("solver", "ipopt", nlp, opts)
 
-    # Rebuild full u
-    x_opt = result.x[:2]
-    u_partial_opt = result.x[2:]
+    sol = solver(x0 = z0, lbx = lbz, ubx = ubz, lbg = [-1,0], ubg = [1,0])
+
+    z_opt = sol["x"].full().flatten()
+    x_opt = z_opt[0:2]
     u_opt = fixed_u.copy()
-    u_opt[0] = u_partial_opt[0]
-    u_opt[1] = u_partial_opt[1]
-    u_opt[2] = u_partial_opt[2]
+    u_opt[:3] = z_opt[2:5]
 
     return x_opt, u_opt
